@@ -1,12 +1,13 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
+import "./style/global.css";
+
 import About from "./components/about";
 import Footer from "./static/footer";
 import Header from "./static/header";
 import Home from "./components/home";
 import useTheme from "./style/useTheme";
-import "./style/global.css";
 import MovieDetails from "./components/movieDetails";
 import Movies from "./components/movies";
 import Tvshows from "./components/tvShows";
