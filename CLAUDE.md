@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - All Markdown files use uppercase names (e.g. `REDESIGN.md`, `REDESIGN-PHASES.md`).
 - The redesign spec is `REDESIGN.md`; work through it in the order given in `REDESIGN-PHASES.md`.
 - The next roadmap is `BETTER-UX.md` (five UX phases, done in order).
+- The long-range plan to reach Letterboxd-level depth is `GLOBAL-IMPROVEMENTS.md` (work order in its section 17).
 
 ## Commands
 
