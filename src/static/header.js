@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Lens from "./lens";
+import Search from "../components/search";
+import { initialsOf } from "./avatar";
 import {
     fetchingUserUIDByEmail,
     fetchUserData,
@@ -11,6 +13,7 @@ const NAV = [
     { to: "/", label: "Home" },
     { to: "/movies", label: "Movies" },
     { to: "/tvShows", label: "TV shows" },
+    { to: "/discover", label: "Discover" },
     { to: "/public", label: "Public lists" },
     { to: "/mylists", label: "My lists" },
 ];
@@ -19,12 +22,6 @@ const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
 
 const isActive = (pathname, to) =>
     to === "/" ? pathname === "/" : pathname.toLowerCase() === to.toLowerCase();
-
-const initialsOf = (name, email) => {
-    const words = (name || "").trim().split(/\s+/).filter(Boolean);
-    if (words.length) return words.slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-    return (email || "?")[0].toUpperCase();
-};
 
 // Who is logged in, re-read on every route change (login/logout happen in this tab,
 // where the storage event never fires).
@@ -133,7 +130,7 @@ export default function Header() {
                         </span>
                     </Link>
 
-                    <nav aria-label="Main" className="hidden md:block">
+                    <nav aria-label="Main" className="hidden lg:block">
                         <ul className="flex items-center gap-1">
                             {NAV.map(({ to, label }) => {
                                 const active = isActive(pathname, to);
@@ -167,17 +164,8 @@ export default function Header() {
                     </nav>
 
                     <div className="ml-auto flex items-center gap-2">
-                        {/* Holds the place of the header search (Phase 3). */}
-                        <Link
-                            to="/filter"
-                            aria-label="Search and filter"
-                            className={`btn btn-icon btn-text ${
-                                isActive(pathname, "/filter") ? "text-screen" : ""
-                            }`}
-                        >
-                            <i className="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                        </Link>
-                        <div className="hidden md:block">{profile}</div>
+                        <Search />
+                        <div className="hidden lg:block">{profile}</div>
                         <button
                             ref={burgerRef}
                             type="button"
@@ -185,7 +173,7 @@ export default function Header() {
                             aria-expanded={open}
                             aria-controls="mobile-menu"
                             aria-label={open ? "Close menu" : "Open menu"}
-                            className="btn btn-icon btn-text text-screen md:hidden"
+                            className="btn btn-icon btn-text text-screen lg:hidden"
                         >
                             <span className="relative block h-3 w-6" aria-hidden="true">
                                 <span
@@ -209,7 +197,7 @@ export default function Header() {
                     <motion.div
                         id="mobile-menu"
                         ref={sheetRef}
-                        className="fixed inset-x-0 bottom-0 z-30 overflow-y-auto bg-booth md:hidden"
+                        className="fixed inset-x-0 bottom-0 z-30 overflow-y-auto bg-booth lg:hidden"
                         style={{ top: scrolled ? 56 : 64 }}
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}

@@ -1,5 +1,5 @@
 export const fetchOneMovie = async (id) => {
-    const API = `https://api.themoviedb.org/3/movie/${id}?api_key=8dc69cc265c5c8924c21ede4b9ddc208&append_to_response=credits,videos`;
+    const API = `https://api.themoviedb.org/3/movie/${id}?api_key=8dc69cc265c5c8924c21ede4b9ddc208&append_to_response=credits,videos,release_dates`;
 
     try {
         const response = await fetch(API);
@@ -12,7 +12,7 @@ export const fetchOneMovie = async (id) => {
 };
 
 export const fetchOneSerie = async (id) => {
-    const API = `https://api.themoviedb.org/3/tv/${id}?api_key=8dc69cc265c5c8924c21ede4b9ddc208&append_to_response=credits,videos`;
+    const API = `https://api.themoviedb.org/3/tv/${id}?api_key=8dc69cc265c5c8924c21ede4b9ddc208&append_to_response=credits,videos,content_ratings`;
 
     try {
         const response = await fetch(API);

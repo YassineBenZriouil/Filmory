@@ -16,8 +16,8 @@ export default function NotFound() {
                 <Link to="/" className="btn btn-primary">
                     Go to home
                 </Link>
-                <Link to="/filter" className="btn btn-secondary">
-                    Search films
+                <Link to="/discover" className="btn btn-secondary">
+                    Discover films
                 </Link>
             </div>
         </div>

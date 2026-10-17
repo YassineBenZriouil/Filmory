@@ -212,16 +212,53 @@
         box-shadow: inset 0 0 0 1px rgb(var(--reel) / 0.4);
     }
     .film-card:hover .film-frame,
-    .film-card:focus-visible .film-frame {
+    .film-card:focus-within .film-frame {
         transform: translateY(-4px);
         box-shadow: var(--glow);
     }
-    .film-card:active .film-frame {
+    .film-card a:active .film-frame {
         transform: translateY(-4px) scale(0.98);
         transition-duration: var(--t-blink);
     }
-    .film-card:focus-visible {
-        outline: none;
+    /* Quick-add rides up with the lifted poster */
+    .film-add {
+        opacity: 0;
+    }
+    .film-card:hover .film-add,
+    .film-card:focus-within .film-add {
+        opacity: 1;
+        transform: translateY(-4px);
+    }
+    @media (hover: none) {
+        .film-add {
+            display: none;
+        }
+    }
+
+    /* List tile: up to four posters fanned out, spreading on hover */
+    .fan-item {
+        --spread: 24px;
+        --tilt: 1deg;
+        transform: translateX(calc(var(--i) * var(--spread)))
+            rotate(calc((var(--i) * 2 - 3) * var(--tilt)));
+        transition: transform var(--t-move) var(--ease-out);
+    }
+    .group:hover .fan-item,
+    .group:focus-within .fan-item {
+        --spread: 36px;
+        --tilt: 1.5deg;
+    }
+
+    /* Thin beam sweeping under the search field while results load */
+    .search-loading::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        height: 2px;
+        width: 30%;
+        background: rgb(var(--beam));
+        animation: search-sweep 0.9s var(--ease-reel) infinite;
     }
     .fade-img {
         opacity: 0;
@@ -320,6 +357,14 @@
     );
     transform: translateX(-100%);
     animation: skeleton-sweep 1.6s var(--ease-reel) infinite;
+}
+@keyframes search-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(340%);
+    }
 }
 @keyframes skeleton-sweep {
     to {
@@ -421,10 +466,20 @@
         animation: none;
     }
     .film-card:hover .film-frame,
-    .film-card:focus-visible .film-frame,
-    .film-card:active .film-frame,
+    .film-card:focus-within .film-frame,
+    .film-card a:active .film-frame,
+    .film-card:hover .film-add,
+    .film-card:focus-within .film-add,
     .btn:active:not(:disabled) {
         transform: none;
+    }
+    .fan-item {
+        transition: none;
+    }
+    .search-loading::after {
+        animation: none;
+        width: 100%;
+        opacity: 0.5;
     }
     .beam {
         transition: opacity 120ms;

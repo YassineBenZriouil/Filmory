@@ -33,7 +33,20 @@ export const fetchCurrentUserLists = async () => {
 export const addListhandler = async (list) => {
     const db = getFirestore();
     const listsRef = collection(db, "Mylists");
-    await addDoc(listsRef, list);
+    const ref = await addDoc(listsRef, list);
+    return ref.id;
+};
+
+// Older lists were created with works: [] instead of { movie: [], tv: [] }.
+export const worksOf = (list) => {
+    const works = list?.works;
+    if (!works || Array.isArray(works)) return { movie: [], tv: [] };
+    return { movie: works.movie || [], tv: works.tv || [] };
+};
+
+export const filmCount = (list) => {
+    const { movie, tv } = worksOf(list);
+    return movie.length + tv.length;
 };
 
 export const editListHandler = async (listId, updatedList) => {
@@ -42,12 +55,14 @@ export const editListHandler = async (listId, updatedList) => {
     await updateDoc(listRef, updatedList);
 };
 
+let uidCache = { email: null, uid: null };
+
 export const fetchingUserUIDByEmail = async () => {
     const email = localStorage.getItem("loggedInUser");
     if (!email) {
-        console.log("No email found in local storage");
         return null;
     }
+    if (uidCache.email === email) return uidCache.uid;
     const db = getFirestore();
     const usersRef = collection(db, "Users");
     const userQuery = query(usersRef, where("email", "==", email));
@@ -56,7 +71,8 @@ export const fetchingUserUIDByEmail = async () => {
         console.log("No user found for this email");
         return null;
     }
-    return userSnapshot.docs[0].id;
+    uidCache = { email, uid: userSnapshot.docs[0].id };
+    return uidCache.uid;
 };
 
 export const deleteListHandler = async (listId) => {
@@ -86,10 +102,13 @@ export const addMovieToList = async (listId, itemId, type) => {
     try {
         const db = getFirestore();
         const listRef = doc(db, "Mylists", listId);
-        console.log("List Reference:", listRef);
-        console.log("Adding item to list:", { type, itemId });
         const updateData = {};
         const itemIdAsNumber = parseInt(itemId, 10);
+        // A field path like works.movie fails when works is still an array; convert it first.
+        const snap = await getDoc(listRef);
+        if (Array.isArray(snap.data()?.works)) {
+            await updateDoc(listRef, { works: { movie: [], tv: [] } });
+        }
         if (type === "movie") {
             updateData[`works.movie`] = arrayUnion(itemIdAsNumber);
         } else if (type === "tv") {
@@ -99,7 +118,6 @@ export const addMovieToList = async (listId, itemId, type) => {
         }
         updateData[`works.${type}`] = arrayUnion(itemIdAsNumber);
         await updateDoc(listRef, updateData);
-        console.log("Item successfully added to the list!");
     } catch (error) {
         console.error("Error adding item to list:", error);
         throw new Error("Failed to add item to the list.");

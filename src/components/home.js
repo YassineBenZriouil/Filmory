@@ -6,7 +6,7 @@ import {
     fetchPopularSeries,
 } from "../movie/allFetcher";
 import SmallCard from "./smallCard";
-import Carousel from "./carousel";
+import Hero from "./hero";
 import CardRow from "./cardRow";
 
 const ROWS = [
@@ -33,16 +33,16 @@ export default function Home() {
     return (
         <div className="pb-10">
             <h1 className="sr-only">Home</h1>
-            <div className="py-6">
-                <Carousel movies={rows[0]} />
+            <Hero movies={rows[0]} />
+            <div className="pt-4">
+                {ROWS.map(({ title, type, seeAll }, i) => (
+                    <CardRow key={title} title={title} seeAll={seeAll}>
+                        {rows[i].map((item) => (
+                            <SmallCard key={item.id} data={item} type={type} />
+                        ))}
+                    </CardRow>
+                ))}
             </div>
-            {ROWS.map(({ title, type, seeAll }, i) => (
-                <CardRow key={title} title={title} seeAll={seeAll}>
-                    {rows[i].map((item) => (
-                        <SmallCard key={item.id} data={item} type={type} />
-                    ))}
-                </CardRow>
-            ))}
         </div>
     );
 }

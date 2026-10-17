@@ -1,272 +1,345 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { fetchOneMovie, fetchOneSerie } from "./../movie/oneFetcher";
-import {
-    fetchMoviesByGenres,
-    fetchSeriesByGenres,
-} from "./../movie/allFetcher";
-import { useParams } from "react-router-dom";
+import { fetchRecommendations } from "./../movie/allFetcher";
 import Loading from "../static/loading";
 import SmallCard from "./smallCard";
-import CardGrid from "./cardGrid";
-import { fetchCurrentUserLists } from "../movie/databaseFetcher";
-import { addMovieToList } from "../movie/databaseFetcher";
-import { customToast } from "../static/toast";
+import CardRow from "./cardRow";
+import ListPicker from "./listPicker";
+import Dialog from "../static/dialog";
+import { flipFrom, takePoster } from "../static/morph";
+import { prefersReducedMotion } from "../static/hooks";
+import { initialsOf } from "../static/avatar";
+
+const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
+const languageName = new Intl.DisplayNames(["en"], { type: "language" });
+const regionName = new Intl.DisplayNames(["en"], { type: "region" });
+
+const safe = (fn, code) => {
+    try {
+        return fn.of(code) || code;
+    } catch {
+        return code;
+    }
+};
+
+const hoursAndMinutes = (minutes) => {
+    if (!minutes) return null;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return [h && `${h}h`, m && `${m}m`].filter(Boolean).join(" ");
+};
+
+const longDate = (iso) =>
+    iso
+        ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+        : null;
+
+const certificationOf = (film, type) => {
+    if (type === "tv") {
+        return film.content_ratings?.results?.find((r) => r.iso_3166_1 === "US")?.rating || null;
+    }
+    const us = film.release_dates?.results?.find((r) => r.iso_3166_1 === "US");
+    return us?.release_dates?.find((d) => d.certification)?.certification || null;
+};
+
+const trailerOf = (film) => {
+    const videos = (film.videos?.results || []).filter((v) => v.site === "YouTube");
+    return (
+        videos.find((v) => v.type === "Trailer" && v.official) ||
+        videos.find((v) => v.type === "Trailer") ||
+        videos.find((v) => v.type === "Teaser") ||
+        null
+    );
+};
+
+// Ten segments, filled to the score; the last one partially.
+function RatingBar({ value }) {
+    return (
+        <span className="flex gap-1" aria-hidden="true">
+            {Array.from({ length: 10 }, (_, i) => {
+                const fill = Math.max(0, Math.min(1, value - i));
+                return (
+                    <span key={i} className="relative h-3 w-2 overflow-hidden rounded-[2px] bg-reel sm:w-2.5">
+                        <span className="absolute inset-y-0 left-0 bg-beam" style={{ width: `${fill * 100}%` }} />
+                    </span>
+                );
+            })}
+        </span>
+    );
+}
+
+function CastRow({ cast }) {
+    if (!cast.length) return null;
+    return (
+        <section aria-labelledby="cast-title" className="py-6">
+            <h2 id="cast-title" className="page-x mx-auto mb-4 max-w-[1464px] text-[25px] font-semibold md:text-[31px]">
+                Cast
+            </h2>
+            <ul className="row-scroller page-x flex snap-x gap-5 overflow-x-auto pb-2 scroll-px-4 md:scroll-px-8">
+                {cast.map((person) => (
+                    <li key={person.credit_id || person.id} className="w-[96px] shrink-0 snap-start">
+                        {person.profile_path ? (
+                            <img
+                                src={`https://image.tmdb.org/t/p/w185${person.profile_path}`}
+                                alt=""
+                                loading="lazy"
+                                width="72"
+                                height="72"
+                                className="grain h-[72px] w-[72px] rounded-full object-cover"
+                            />
+                        ) : (
+                            <span className="grid h-[72px] w-[72px] place-items-center rounded-full bg-leader font-display text-2xl font-extrabold text-grain">
+                                {initialsOf(person.name)}
+                            </span>
+                        )}
+                        <p className="mt-2 font-bold leading-snug">{person.name}</p>
+                        {person.character && (
+                            <p className="text-[13px] leading-snug text-grain">{person.character}</p>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </section>
+    );
+}
 
 export default function MovieDetails() {
     const { id, type } = useParams();
-    const [movie, setMovie] = useState(null);
-    const [simular, setSimular] = useState(null);
-    const [limit, setLimit] = useState(6);
-    const targetRef = useRef(null);
-    const [userLists, setUserLists] = useState(null);
-    const [loadingLists, setLoadingLists] = useState(true);
-    const [chosenList, setChosenList] = useState("");
-
-    const scrollToTarget = () => {
-        if (targetRef.current) {
-            targetRef.current.scrollIntoView({
-                behavior: "smooth",
-            });
-        }
-    };
-
-    const fetchingMovieData = async () => {
-        let data;
-        if (type === "movie") {
-            data = await fetchOneMovie(id);
-        } else if (type === "tv") {
-            data = await fetchOneSerie(id);
-        }
-        setMovie(data);
-    };
-
-    const fetchingSimularMoviesData = async () => {
-        if (movie) {
-            const movieGenresids = movie.genres?.map((genre) => genre.id) || [];
-            const data = await fetchMoviesByGenres(movieGenresids.slice(0, 1));
-            setSimular(data);
-        }
-    };
-
-    const fetchingSimularSeriesData = async () => {
-        if (movie) {
-            const movieGenresids = movie.genres?.map((genre) => genre.id) || [];
-            const data = await fetchSeriesByGenres(movieGenresids.slice(0, 2));
-            setSimular(data);
-        }
-    };
+    const navigate = useNavigate();
+    const [film, setFilm] = useState(undefined); // undefined = loading, null = failed
+    const [more, setMore] = useState([]);
+    const [picker, setPicker] = useState(false);
+    const [trailerOpen, setTrailerOpen] = useState(false);
+    const [posterLoaded, setPosterLoaded] = useState(false);
+    const addRef = useRef(null);
+    const posterRef = useRef(null);
+    const loggedIn = !!localStorage.getItem("loggedInUser");
 
     useEffect(() => {
-        fetchingMovieData();
-    }, [id]);
-
-    useEffect(() => {
-        if (movie) {
-            scrollToTarget();
-            if (type === "movie") {
-                fetchingSimularMoviesData();
-            } else if (type === "tv") {
-                fetchingSimularSeriesData();
-            }
-        }
-    }, [movie]);
-
-    useEffect(() => {
-        const fetchLists = async () => {
-            const userLists = await fetchCurrentUserLists();
-            setUserLists(userLists);
-            setLoadingLists(false);
+        let alive = true;
+        const fetcher = type === "tv" ? fetchOneSerie : fetchOneMovie;
+        fetcher(id).then((data) => {
+            if (!alive) return;
+            setFilm(data && data.id ? data : null);
+        });
+        fetchRecommendations(type === "tv" ? "tv" : "movie", id).then((list) => alive && setMore(list));
+        return () => {
+            alive = false;
         };
-        fetchLists();
-    }, []);
+    }, [id, type]);
 
-    const typeCheck = () => {
-        return type === "tv"
-            ? ["name", "first_air_date"]
-            : ["title", "release_date"];
-    };
-
-    const handleAddToList = async () => {
-        if (!chosenList) {
-            customToast("Choose a list first", "error");
-            return;
-        }
-
-        try {
-            await addMovieToList(chosenList, id, type); // id and type represent the item and its type
-            customToast(
-                `Added to ${userLists?.find((l) => l.id === chosenList)?.listName || "your list"}`,
-                "success"
-            );
-        } catch (error) {
-            console.error("Error adding item to list:", error);
-            customToast("Couldn’t add it to the list. Try again.", "error");
-        }
-    };
-
-    const seeMore = () => {
-        setLimit((prevLimit) => prevLimit + 6);
-    };
-
-    const [titleField, dateField] = typeCheck();
+    const title = film && (type === "tv" ? film.name : film.title);
 
     useEffect(() => {
-        if (movie?.[titleField]) {
-            document.title = `${movie[titleField]} – ${
-                process.env.REACT_APP_COMPANY_NAME || "Filmory"
-            }`;
-        }
-    }, [movie, titleField]);
+        if (title) document.title = `${title} – ${brand}`;
+    }, [title]);
 
-    if (!movie) {
-        return <Loading />;
+    // Arriving from a "More like this" card: fly the poster in from where the card was.
+    useLayoutEffect(() => {
+        if (!film || !posterRef.current) return;
+        const from = takePoster(id);
+        if (from && !prefersReducedMotion()) flipFrom(posterRef.current, from);
+    }, [film, id]);
+
+    if (film === undefined) return <Loading />;
+
+    if (film === null) {
+        return (
+            <div className="page flex min-h-[60vh] flex-col items-start justify-center gap-6">
+                <h1 className="page-title">This title couldn’t be loaded</h1>
+                <p className="text-grain">It may have been removed from TMDB, or the connection dropped.</p>
+                <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+                    Go back
+                </button>
+            </div>
+        );
     }
 
-    if (loadingLists) {
-        return <Loading />;
-    }
+    const date = type === "tv" ? film.first_air_date : film.release_date;
+    const year = date?.slice(0, 4);
+    const runtime = type === "tv"
+        ? film.episode_run_time?.[0] && `${film.episode_run_time[0]} min episodes`
+        : hoursAndMinutes(film.runtime);
+    const certification = certificationOf(film, type);
+    const genres = (film.genres || []).map((g) => g.name);
+    const rating = film.vote_count ? film.vote_average : null;
+    const trailer = trailerOf(film);
+    const countries =
+        type === "tv"
+            ? (film.origin_country || []).map((c) => safe(regionName, c))
+            : (film.production_countries || []).map((c) => c.name);
+
+    const details = [
+        ["Status", film.status],
+        [type === "tv" ? "First aired" : "Released", longDate(date)],
+        ["Original language", film.original_language && safe(languageName, film.original_language)],
+        [countries.length > 1 ? "Countries" : "Country", countries.join(", ")],
+        [type === "tv" ? "Episode length" : "Runtime", type === "tv" ? film.episode_run_time?.[0] && `${film.episode_run_time[0]} min` : hoursAndMinutes(film.runtime)],
+        type === "tv" && ["Seasons", film.number_of_seasons],
+        type === "tv" && ["Episodes", film.number_of_episodes],
+    ].filter((row) => row && row[1]);
 
     return (
-        <div
-            className="min-h-screen bg-cover bg-center flex items-center justify-center"
-            style={{
-                backgroundImage: `linear-gradient(to right, rgb(var(--booth) / 0.55), rgb(var(--booth) / 0.85)), url(https://image.tmdb.org/t/p/w1280${movie.backdrop_path})`,
-            }}
-        >
+        <article className="pb-12">
+            {/* Backdrop header */}
+            <div className="relative h-[42vh] min-h-[300px] max-h-[640px] overflow-hidden lg:h-[64vh]" aria-hidden="true">
+                {film.backdrop_path && (
+                    <img
+                        src={`https://image.tmdb.org/t/p/w1280${film.backdrop_path}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                    />
+                )}
+                <div className="absolute inset-0 bg-[linear-gradient(to_top,rgb(var(--booth))_0%,rgb(var(--booth)/0.55)_45%,rgb(var(--booth)/0.15)_100%)]" />
+            </div>
+
+            {/* Lobby card */}
+            <div className="page-x relative mx-auto -mt-48 flex max-w-content flex-col gap-6 sm:-mt-56 lg:-mt-72 lg:flex-row lg:items-end lg:gap-10">
                 <div
-                    ref={targetRef}
-                    className="flex flex-col w-fit m-2 p-2 lg:flex-row items-center lg:items-start bg-leader text-screen rounded-[14px] overflow-hidden justify-between"
+                    ref={posterRef}
+                    className="grain relative aspect-[2/3] w-[160px] shrink-0 overflow-hidden rounded-[3px] shadow-[0_0_0_1px_rgb(var(--reel)/0.5)] sm:w-[200px] lg:w-[280px] lg:translate-y-24"
                 >
-                    <div className="flex justify-center items-center">
+                    {film.poster_path && (
                         <img
-                            src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
-                            alt={movie[titleField]}
-                            className="w-80 lg:w-50 h-auto object-cover rounded"
+                            src={`https://image.tmdb.org/t/p/w500${film.poster_path}`}
+                            alt={`Poster for ${title}`}
+                            onLoad={() => setPosterLoaded(true)}
+                            className={`fade-img h-full w-full object-cover ${posterLoaded ? "is-loaded" : ""}`}
+                        />
+                    )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                    <h1 className="text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[61px] lg:text-[76px]">
+                        {title}
+                    </h1>
+                    <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-grain">
+                        {year && <span>{year}</span>}
+                        {runtime && <span>{runtime}</span>}
+                        {type === "tv" && film.number_of_seasons && (
+                            <span>
+                                {film.number_of_seasons} {film.number_of_seasons === 1 ? "season" : "seasons"}
+                            </span>
+                        )}
+                        {certification && (
+                            <span className="rounded-[3px] border border-reel px-1.5 text-[13px] leading-6">
+                                {certification}
+                            </span>
+                        )}
+                        {genres.length > 0 && <span>{genres.join(", ")}</span>}
+                    </p>
+
+                    <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+                        {rating !== null ? (
+                            <>
+                                <span className="font-display text-[49px] font-extrabold leading-none tabular-nums text-beam">
+                                    {rating.toFixed(1)}
+                                </span>
+                                <span className="flex flex-col gap-1.5">
+                                    <RatingBar value={rating} />
+                                    <span className="text-[13px] text-grain">
+                                        from {film.vote_count.toLocaleString()} ratings
+                                    </span>
+                                </span>
+                                <span className="sr-only">Rated {rating.toFixed(1)} out of 10</span>
+                            </>
+                        ) : (
+                            <span className="text-grain">Not rated yet</span>
+                        )}
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                        {loggedIn ? (
+                            <button
+                                ref={addRef}
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => setPicker((o) => !o)}
+                                aria-expanded={picker}
+                            >
+                                <i className="fa-solid fa-plus text-sm" aria-hidden="true"></i>
+                                Add to list
+                                <i className={`fa-solid fa-chevron-down text-xs transition-transform duration-quick ${picker ? "rotate-180" : ""}`} aria-hidden="true"></i>
+                            </button>
+                        ) : (
+                            <Link to="/login" className="btn btn-primary">
+                                Log in to save
+                            </Link>
+                        )}
+                        {trailer && (
+                            <button type="button" className="btn btn-secondary" onClick={() => setTrailerOpen(true)}>
+                                <i className="fa-solid fa-play text-sm" aria-hidden="true"></i>
+                                Trailer
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Synopsis and details */}
+            <div className="page-x mx-auto mt-10 grid max-w-content gap-10 lg:mt-36 lg:grid-cols-[280px_1fr] lg:gap-10">
+                <div className="hidden lg:block" />
+                <div className="space-y-10">
+                    <p className="max-w-[68ch] text-lg leading-relaxed">{film.overview || "No synopsis yet."}</p>
+                    {details.length > 0 && (
+                        <section aria-labelledby="details-title">
+                            <h2 id="details-title" className="text-[25px] font-semibold md:text-[31px]">
+                                Details
+                            </h2>
+                            <dl className="mt-4 grid max-w-3xl grid-cols-1 gap-x-10 gap-y-4 sm:grid-cols-2">
+                                {details.map(([label, value]) => (
+                                    <div key={label}>
+                                        <dt className="text-[13px] text-grain">{label}</dt>
+                                        <dd>{value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </section>
+                    )}
+                </div>
+            </div>
+
+            <div className="mt-6">
+                <CastRow cast={(film.credits?.cast || []).slice(0, 12)} />
+                {more.length > 0 && (
+                    <CardRow title="More like this">
+                        {more.map((item) => (
+                            <SmallCard key={item.id} data={item} type={type === "tv" ? "tv" : "movie"} morph />
+                        ))}
+                    </CardRow>
+                )}
+            </div>
+
+            {loggedIn && (
+                <ListPicker
+                    anchorRef={addRef}
+                    open={picker}
+                    onClose={() => setPicker(false)}
+                    id={film.id}
+                    type={type === "tv" ? "tv" : "movie"}
+                    title={title}
+                />
+            )}
+
+            {trailer && (
+                <Dialog open={trailerOpen} onClose={() => setTrailerOpen(false)} title={`${title} trailer`} variant="media">
+                    <div className="relative aspect-video w-full overflow-hidden rounded-[14px] bg-booth">
+                        <iframe
+                            src={`https://www.youtube-nocookie.com/embed/${trailer.key}?autoplay=1&rel=0`}
+                            title={`${title} trailer`}
+                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                            allowFullScreen
+                            className="absolute inset-0 h-full w-full"
                         />
                     </div>
-                    <div className="text-screen p-2 lg:p-2 lg:w-2/3 space-y-7 align-middle justify-center">
-                        <h2 className="text-4xl font-bold">
-                            {movie[titleField]}
-                        </h2>
-                        <div className="flex justify-between text-sm">
-                            <p className="text-screen p-2">
-                                Rating:{" "}
-                                {movie.vote_average?.toFixed(1) || "N/A"} / 10
-                            </p>
-                            <p className="text-screen p-2">
-                                Released:{" "}
-                                {new Date(
-                                    movie[dateField]
-                                ).toLocaleDateString()}
-                            </p>
-                        </div>
-                        <p className="text-base leading-relaxed w-full">
-                            {movie.overview ||
-                                "Overview not available at the moment."}
-                        </p>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <tbody>
-                                    {[
-                                        {
-                                            label: "Genres",
-                                            value:
-                                                movie.genres
-                                                    ?.map((g) => g.name)
-                                                    .join(", ") || "N/A",
-                                        },
-                                        {
-                                            label: "Status",
-                                            value: movie.status,
-                                        },
-                                        {
-                                            label: "Safe for Kids",
-                                            value: movie.adult ? "NO" : "YES",
-                                        },
-                                        {
-                                            label: movie.runtime
-                                                ? "Watch Time"
-                                                : "Episode Run Time",
-                                            value: movie.runtime
-                                                ? `${(
-                                                      movie.runtime / 60
-                                                  ).toFixed(2)} Hours`
-                                                : `${
-                                                      movie
-                                                          .episode_run_time?.[0] ||
-                                                      0
-                                                  } Minutes`,
-                                        },
-                                        {
-                                            label: "Popularity",
-                                            value: movie.popularity,
-                                        },
-                                        {
-                                            label: "Origin Country",
-                                            value:
-                                                movie.origin_country?.join(
-                                                    ", "
-                                                ) || "N/A",
-                                        },
-                                        {
-                                            label: "Language",
-                                            value: movie.original_language,
-                                        },
-                                    ].map(({ label, value }) => (
-                                        <tr key={label}>
-                                            <td className="px-4 py-2 font-semibold">
-                                                {label}:
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                {value}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div className="flex justify-between">
-                            <select
-                                className="field w-auto cursor-pointer"
-                                value={chosenList}
-                                onChange={(e) => setChosenList(e.target.value)}
-                            >
-                                <option value="">Add To List</option>
-                                {userLists?.map((list) => (
-                                    <option key={list.id} value={list.id}>
-                                        {list.listName}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                onClick={handleAddToList}
-                                className="btn btn-primary"
-                            >
-                                Add
-                            </button>
-                        </div>
+                    <div className="mt-3 flex justify-end">
+                        <button type="button" className="btn btn-secondary bg-booth" onClick={() => setTrailerOpen(false)}>
+                            Close
+                        </button>
                     </div>
-                </div>
-                <div className="flex flex-col w-fill bg-leader text-screen rounded-[14px] overflow-hidden m-2 p-2">
-                    <h1 className="text-2xl font-bold ml-20 m-3">
-                        Similar {type === "movie" ? "Movies" : "Series"}
-                    </h1>
-                    <CardGrid>
-                        {simular?.slice(0, limit).map((latestMovie) => (
-                            <SmallCard
-                                key={latestMovie.id}
-                                data={latestMovie}
-                                type={type === "movie" ? "movie" : "tv"}
-                            />
-                        ))}
-                    </CardGrid>
-                    <button
-                        className="btn btn-secondary m-3 mx-auto"
-                        onClick={seeMore}
-                    >
-                        See More
-                    </button>
-                </div>
-        </div>
+                </Dialog>
+            )}
+        </article>
     );
 }

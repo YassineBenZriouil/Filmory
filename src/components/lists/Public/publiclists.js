@@ -1,63 +1,103 @@
-import React, { useEffect, useState } from "react";
-import { fetchAllPublicLists } from "../../../movie/databaseFetcher"; // Import the correct fetch function
-import { searchListByQuery } from "../../../movie/databaseFetcher";
-import PublicListCard from "./publicListCard";
+import React, { useEffect, useMemo, useState } from "react";
+import { fetchAllPublicLists, fetchUserData, filmCount } from "../../../movie/databaseFetcher";
+import ListTile, { TileSkeleton } from "../listTile";
+
+const GRID = "grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5";
+const userIdOf = (list) => (typeof list.user === "string" ? list.user.split("/").pop() : null);
 
 export default function PublicLists() {
-    const [lists, setLists] = useState([]);
-    const [searchQuery, setSearchQuery] = useState("");
+    const [lists, setLists] = useState(null);
+    const [authors, setAuthors] = useState({});
+    const [query, setQuery] = useState("");
+    const [sort, setSort] = useState("newest");
 
     useEffect(() => {
-        const fetchLists = async () => {
-            const publicLists = await fetchAllPublicLists(); // Fetch public lists
-            setLists(publicLists);
+        let alive = true;
+        (async () => {
+            try {
+                const publicLists = await fetchAllPublicLists();
+                if (!alive) return;
+                setLists(publicLists);
+                // One lookup per author, all at once, instead of one per card.
+                const ids = [...new Set(publicLists.map(userIdOf).filter(Boolean))];
+                const users = await Promise.all(ids.map((uid) => fetchUserData(uid)));
+                if (alive) setAuthors(Object.fromEntries(ids.map((uid, i) => [uid, users[i]])));
+            } catch (error) {
+                console.error("Error fetching public lists:", error);
+                if (alive) setLists([]);
+            }
+        })();
+        return () => {
+            alive = false;
         };
-
-        fetchLists();
     }, []);
 
-    const handleSearch = async (searchQuery) => {
-        if (searchQuery === "") {
-            const publicLists = await fetchAllPublicLists(); // If no search query, fetch all public lists
-            setLists(publicLists);
-        } else {
-            const searchedLists = await searchListByQuery(searchQuery);
-            setLists(searchedLists);
-        }
-    };
+    // Search runs over public lists only, never anyone's private lists.
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        const matched = (lists || []).filter(
+            (l) => !q || l.listName?.toLowerCase().includes(q) || l.description?.toLowerCase().includes(q)
+        );
+        return matched.sort((a, b) =>
+            sort === "films" ? filmCount(b) - filmCount(a) : (b.createdAt || 0) - (a.createdAt || 0)
+        );
+    }, [lists, query, sort]);
 
     return (
-        <div className="page flex min-h-[70vh] items-center justify-center">
-            <div className="w-full max-w-4xl">
-                    <div className="panel p-6 md:p-8 w-full space-y-6">
-                        <h1 className="page-title">
-                            Public Lists
-                        </h1>
-                        <p>Take a Look At other people's lists </p>
-                        <div className="text-center">
-                            <input
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value); // Update the search query state
-                                    handleSearch(e.target.value); // Trigger search on every change
-                                }}
-                                placeholder="Search Lists With key Words"
-                                type="text"
-                                className="field mt-4"
-                            />
-                        </div>
-                        <div className="space-y-4">
-                            {lists.length > 0 ? (
-                                lists.map((list) => (
-                                    <PublicListCard key={list.id} list={list} />
-                                ))
-                            ) : (
-                                <p className="text-grain">
-                                    No lists found...
-                                </p>
-                            )}
-                        </div>
+        <div className="page">
+            <h1 className="page-title">Public lists</h1>
+            <p className="mt-2 text-grain">Lists other people have shared</p>
+
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+                <div className="relative w-full max-w-md">
+                    <i className="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-grain" aria-hidden="true"></i>
+                    <label htmlFor="public-search" className="sr-only">
+                        Search public lists
+                    </label>
+                    <input
+                        id="public-search"
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search by list name or description"
+                        className="field pl-9"
+                    />
+                </div>
+                <label className="flex items-center gap-2 text-[13px] text-grain sm:ml-auto">
+                    Sort
+                    <select value={sort} onChange={(e) => setSort(e.target.value)} className="field min-h-[40px] w-auto cursor-pointer text-base">
+                        <option value="newest">Newest</option>
+                        <option value="films">Most films</option>
+                    </select>
+                </label>
+            </div>
+
+            <div className="mt-8">
+                {lists === null ? (
+                    <div className={GRID}>
+                        {[0, 1, 2, 3].map((i) => (
+                            <TileSkeleton key={i} />
+                        ))}
                     </div>
+                ) : visible.length === 0 ? (
+                    <p className="text-lg text-grain">
+                        {query.trim() ? `No public lists match “${query.trim()}”.` : "No one has shared a list yet."}
+                    </p>
+                ) : (
+                    <div className={GRID}>
+                        {visible.map((list) => {
+                            const uid = userIdOf(list);
+                            return (
+                                <ListTile
+                                    key={list.id}
+                                    list={list}
+                                    to={`/publicListInside/${list.id}`}
+                                    author={uid in authors ? authors[uid] || { userName: "" } : null}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );
