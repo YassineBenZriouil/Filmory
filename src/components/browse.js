@@ -6,6 +6,7 @@ import CardGrid from "./cardGrid";
 import { fetchBrowsePage } from "../movie/allFetcher";
 import { SkeletonGrid } from "../static/loading";
 import { prefersReducedMotion } from "../static/hooks";
+import { LoadError } from "../static/resilience";
 
 const COPY = {
     movie: { title: "Movies", noun: "movies" },
@@ -81,6 +82,7 @@ export default function Browse({ type }) {
     const page = Math.max(1, parseInt(params.get("page"), 10) || 1);
     const [data, setData] = useState(null); // { page, results, totalPages }
     const [loading, setLoading] = useState(true);
+    const [attempt, setAttempt] = useState(0);
     const titleRef = useRef(null);
 
     useEffect(() => {
@@ -94,7 +96,7 @@ export default function Browse({ type }) {
         return () => {
             alive = false;
         };
-    }, [type, page]);
+    }, [type, page, attempt]);
 
     const changePage = (next) => {
         setParams(next === 1 ? {} : { page: String(next) });
@@ -113,9 +115,10 @@ export default function Browse({ type }) {
                     loading ? (
                         <SkeletonGrid />
                     ) : (
-                        <p className="text-grain">
-                            Couldn’t load {noun}. Check your connection and refresh the page.
-                        </p>
+                        <LoadError
+                            message={`Couldn’t load ${noun}. Check your connection, then try again.`}
+                            onRetry={() => setAttempt((n) => n + 1)}
+                        />
                     )
                 ) : (
                     <motion.div

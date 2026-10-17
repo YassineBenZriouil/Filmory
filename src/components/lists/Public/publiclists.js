@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchAllPublicLists, fetchUserData, filmCount } from "../../../movie/databaseFetcher";
+import { fetchAllPublicLists, fetchProfile, filmCount } from "../../../movie/databaseFetcher";
 import ListTile, { TileSkeleton } from "../listTile";
 
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5";
@@ -20,7 +20,7 @@ export default function PublicLists() {
                 setLists(publicLists);
                 // One lookup per author, all at once, instead of one per card.
                 const ids = [...new Set(publicLists.map(userIdOf).filter(Boolean))];
-                const users = await Promise.all(ids.map((uid) => fetchUserData(uid)));
+                const users = await Promise.all(ids.map((uid) => fetchProfile(uid)));
                 if (alive) setAuthors(Object.fromEntries(ids.map((uid, i) => [uid, users[i]])));
             } catch (error) {
                 console.error("Error fetching public lists:", error);

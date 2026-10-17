@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import {
     BrowserRouter as Router,
     Routes,
     Route,
     Navigate,
     useLocation,
+    useNavigationType,
 } from "react-router-dom";
 import {
     AnimatePresence,
@@ -15,25 +16,34 @@ import {
 
 import "./style/global.css";
 
-import About from "./components/about";
 import Footer from "./static/footer";
 import Header from "./static/header";
 import Beam from "./static/beam";
 import Home from "./components/home";
-import useTheme from "./style/useTheme";
-import MovieDetails from "./components/movieDetails";
-import Browse from "./components/browse";
-import Discover from "./components/discover";
-import Profile from "./auth/profile";
-import Register from "./auth/register";
-import Login from "./auth/login";
-import MyLists from "./components/lists/myLists";
-import ListPage from "./components/lists/listPage";
-import PublicLists from "./components/lists/Public/publiclists";
 import NotFound from "./components/notFound";
+import Loading from "./static/loading";
+import useTheme from "./style/useTheme";
+import { ThemeContext } from "./style/themeContext";
+import { AuthProvider } from "./auth/authContext";
+import { OfflineBanner, RouteErrorBoundary } from "./static/resilience";
+import { rememberScroll, restoreScroll, savedScroll } from "./static/scroll";
+import * as routes from "./lazyRoutes";
+
 
 import { ToastContainer, cssTransition } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+// Everything except Home and the 404 loads on demand.
+const About = lazy(routes.loadAbout);
+const MovieDetails = lazy(routes.loadDetails);
+const Browse = lazy(routes.loadBrowse);
+const Discover = lazy(routes.loadDiscover);
+const Person = lazy(routes.loadPerson);
+const AuthScreen = lazy(routes.loadAuth);
+const Profile = lazy(routes.loadProfile);
+const MyLists = lazy(routes.loadMyLists);
+const ListPage = lazy(routes.loadListPage);
+const PublicLists = lazy(routes.loadPublicLists);
 
 const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
 
@@ -53,6 +63,7 @@ const TITLES = {
     listinside: "List",
     public: "Public lists",
     publiclistinside: "Public list",
+    person: "Person",
 };
 
 const EASE_OUT = [0.2, 0.8, 0.2, 1];
@@ -73,10 +84,30 @@ const Rise = cssTransition({
     exit: "toast-rise-out",
 });
 
+// Tells screen-reader users which page they landed on. Waits so pages that set
+// their own title after loading (details, lists) are announced correctly.
+function RouteAnnouncer({ pathname }) {
+    const [message, setMessage] = useState("");
+    const first = useRef(true);
+    useEffect(() => {
+        if (first.current) {
+            first.current = false;
+            return;
+        }
+        const t = setTimeout(() => setMessage(document.title.split(" – ")[0]), 700);
+        return () => clearTimeout(t);
+    }, [pathname]);
+    return (
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {message}
+        </div>
+    );
+}
+
 function usePageTitle(pathname) {
     useEffect(() => {
         const segment = pathname.split("/")[1].toLowerCase();
-        if (segment === "moviedetails") return;
+        if (segment === "moviedetails" || segment === "person") return;
         const label = segment in TITLES ? TITLES[segment] : "Page not found";
         document.title = label ? `${label} – ${brand}` : brand;
     }, [pathname]);
@@ -92,8 +123,48 @@ function AnimatedRoutes() {
     const custom = { shift, morph };
     usePageTitle(location.pathname);
 
+    // Back/Forward restore the scroll position of that history entry; new pages start at the top.
+    const navType = useNavigationType();
+    const latest = useRef({ navType, key: location.key, pathname: location.pathname });
+    const previousPath = useRef(location.pathname);
+    latest.current = { navType, key: location.key, pathname: location.pathname };
+
+    useEffect(() => {
+        window.history.scrollRestoration = "manual";
+        return restoreScroll(savedScroll(location.key)); // after a refresh
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        let frame;
+        const onScroll = () => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => rememberScroll(location.key, window.scrollY));
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        // Same page, different query (e.g. ?page=2): no exit animation runs, so restore here.
+        let stop;
+        if (previousPath.current === location.pathname && navType === "POP") {
+            stop = restoreScroll(savedScroll(location.key));
+        }
+        previousPath.current = location.pathname;
+        return () => {
+            cancelAnimationFrame(frame);
+            window.removeEventListener("scroll", onScroll);
+            stop?.();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.key]);
+
+    const afterExit = () => {
+        const { navType: type, key } = latest.current;
+        if (type === "POP") restoreScroll(savedScroll(key));
+        else window.scrollTo(0, 0);
+    };
+
     return (
         <>
+            <RouteAnnouncer pathname={location.pathname} />
             {!reduce && !morph && location.pathname !== firstKey.current && (
                 <motion.div
                     key={location.pathname}
@@ -107,7 +178,7 @@ function AnimatedRoutes() {
             <AnimatePresence
                 mode="wait"
                 custom={custom}
-                onExitComplete={() => window.scrollTo(0, 0)}
+                onExitComplete={afterExit}
             >
                 <motion.main
                     key={location.pathname}
@@ -120,6 +191,8 @@ function AnimatedRoutes() {
                     animate="shown"
                     exit="leave"
                 >
+                    <RouteErrorBoundary resetKey={location.pathname}>
+                    <Suspense fallback={<Loading />}>
                     <Routes location={location}>
                         <Route path="/" element={<Home />} />
                         <Route path="/about" element={<About />} />
@@ -136,8 +209,8 @@ function AnimatedRoutes() {
                             path="/lists"
                             element={<Navigate to="/mylists" replace />}
                         />
-                        <Route path="/register" element={<Register />} />
-                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<AuthScreen mode="register" />} />
+                        <Route path="/login" element={<AuthScreen mode="login" />} />
                         <Route path="/profile" element={<Profile />} />
                         <Route path="/mylists" element={<MyLists />} />
                         <Route path="/addList" element={<MyLists sheet="new" />} />
@@ -148,8 +221,11 @@ function AnimatedRoutes() {
                             path="/publicListInside/:id"
                             element={<ListPage publicRoute />}
                         />
+                        <Route path="/person/:id" element={<Person />} />
                         <Route path="*" element={<NotFound />} />
                     </Routes>
+                    </Suspense>
+                    </RouteErrorBoundary>
                 </motion.main>
             </AnimatePresence>
         </>
@@ -160,6 +236,8 @@ function App() {
     const { theme, resolved, setTheme } = useTheme();
     return (
         // "user": with reduced motion on, framer drops transforms and keeps opacity fades.
+        <AuthProvider>
+        <ThemeContext.Provider value={{ theme, setTheme }}>
         <MotionConfig reducedMotion="user">
             <Router>
                 <div className="flex min-h-screen flex-col">
@@ -182,12 +260,15 @@ function App() {
                         )}
                     />
                     <Header />
+                    <OfflineBanner />
                     <AnimatedRoutes />
                     <Footer theme={theme} setTheme={setTheme} />
                 </div>
                 <Beam />
             </Router>
         </MotionConfig>
+        </ThemeContext.Provider>
+        </AuthProvider>
     );
 }
 

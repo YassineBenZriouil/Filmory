@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Filmory security rules.
+// Lists keep their owner as the string "/Users/<uid>" in `user`, so ownership is
+// checked against that string; no data migration is needed.
+// Deploy with: firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownerPath() {
+      return '/Users/' + request.auth.uid;
+    }
+
+    // Private account details (includes the email). Only the owner.
+    match /Users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Public display name shown on public lists. Anyone can read; only the owner writes,
+    // and only a short userName.
+    match /Profiles/{uid} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['userName'])
+        && request.resource.data.userName is string
+        && request.resource.data.userName.size() <= 40;
+    }
+
+    match /Mylists/{listId} {
+      // Public lists are readable by anyone; private ones only by their owner.
+      allow read: if resource.data.isPublic == true
+        || (signedIn() && resource.data.user == ownerPath());
+
+      // New lists must belong to whoever creates them.
+      allow create: if signedIn()
+        && request.resource.data.user == ownerPath()
+        && request.resource.data.listName is string
+        && request.resource.data.listName.size() > 0
+        && request.resource.data.listName.size() <= 60;
+
+      // Only the owner edits or deletes, and ownership can't be handed to someone else.
+      allow update: if signedIn()
+        && resource.data.user == ownerPath()
+        && request.resource.data.user == resource.data.user;
+      allow delete: if signedIn() && resource.data.user == ownerPath();
+    }
+  }
+}

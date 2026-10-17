@@ -1,7 +1,9 @@
 import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import ListPicker from "./listPicker";
+import ListPicker from "./lazyListPicker";
 import { stashPoster } from "../static/morph";
+import { prefetchTitle } from "../movie/oneFetcher";
+import { loadDetails } from "../lazyRoutes";
 
 // A film as a frame: poster, rating on the print, title and year beneath.
 // Renders its own link to the details page, plus a quick-add button
@@ -13,7 +15,18 @@ export default function SmallCard({ data, type, morph = false, quickAdd = true, 
     const frameRef = useRef(null);
     const addRef = useRef(null);
     const press = useRef(null);
+    const hover = useRef(null);
     if (!data) return null;
+
+    // Fetch the details page (data and code) once intent is clear.
+    const prefetch = () => {
+        prefetchTitle(type, data.id);
+        loadDetails();
+    };
+    const startHover = () => {
+        hover.current = setTimeout(prefetch, 150);
+    };
+    const endHover = () => clearTimeout(hover.current);
 
     const title = type === "tv" ? data.name : data.title;
     const date = type === "tv" ? data.first_air_date : data.release_date;
@@ -27,6 +40,7 @@ export default function SmallCard({ data, type, morph = false, quickAdd = true, 
     };
 
     const startPress = () => {
+        prefetch();
         if (!quickAdd) return;
         press.current = setTimeout(() => {
             press.current = "long";
@@ -56,6 +70,9 @@ export default function SmallCard({ data, type, morph = false, quickAdd = true, 
                 aria-label={label}
                 className="group block outline-none"
                 onClick={onClick}
+                onMouseEnter={startHover}
+                onMouseLeave={endHover}
+                onFocus={prefetch}
                 onTouchStart={startPress}
                 onTouchEnd={cancelPress}
                 onTouchMove={cancelPress}
@@ -68,6 +85,10 @@ export default function SmallCard({ data, type, morph = false, quickAdd = true, 
                     {data.poster_path ? (
                         <img
                             src={`https://image.tmdb.org/t/p/w342${data.poster_path}`}
+                            srcSet={[185, 342, 500]
+                                .map((w) => `https://image.tmdb.org/t/p/w${w}${data.poster_path} ${w}w`)
+                                .join(", ")}
+                            sizes="(min-width: 768px) 200px, 160px"
                             alt=""
                             width="342"
                             height="513"

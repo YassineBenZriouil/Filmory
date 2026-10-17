@@ -2,10 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { searchTitles } from "../movie/allFetcher";
-import { addMovieToList } from "../movie/databaseFetcher";
 import { invalidateUserLists } from "../movie/listsStore";
 import { customToast } from "../static/toast";
 import { useMediaQuery } from "../static/hooks";
+import { initialsOf } from "../static/avatar";
+import {
+    addRecentSearch,
+    clearRecentSearches,
+    getRecentSearches,
+    getRecentlyViewed,
+} from "../static/prefs";
 
 const MAX = 8;
 const EASE_OUT = [0.2, 0.8, 0.2, 1];
@@ -14,6 +20,15 @@ const EASE_OUT = [0.2, 0.8, 0.2, 1];
 export const openAddFilms = (list) =>
     window.dispatchEvent(new CustomEvent("filmory:add-films", { detail: list }));
 export const LIST_CHANGED = "filmory:list-changed";
+
+// Accents and punctuation removed: "Amélie!" → "amelie".
+const normalise = (q) =>
+    q
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
 function Highlight({ text, query }) {
     const i = text.toLowerCase().indexOf(query.trim().toLowerCase());
@@ -28,18 +43,42 @@ function Highlight({ text, query }) {
     );
 }
 
+function Thumb({ path, round, name }) {
+    const shape = round ? "h-12 w-12 rounded-full" : "h-[69px] w-[46px] rounded-[3px]";
+    if (!path) {
+        return (
+            <span className={`grain relative grid shrink-0 place-items-center font-display font-extrabold text-grain ${shape}`}>
+                {round ? initialsOf(name) : ""}
+            </span>
+        );
+    }
+    return (
+        <img
+            src={`https://image.tmdb.org/t/p/w92${path}`}
+            alt=""
+            loading="lazy"
+            width={round ? 48 : 46}
+            height={round ? 48 : 69}
+            className={`grain relative shrink-0 object-cover ${shape}`}
+        />
+    );
+}
+
 export default function Search() {
     const navigate = useNavigate();
     const { pathname } = useLocation();
     const desktop = useMediaQuery("(min-width: 768px)");
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
+    const [correctedTo, setCorrectedTo] = useState(null);
     const [status, setStatus] = useState("idle"); // idle | loading | done | error
-    const [open, setOpen] = useState(false); // results panel
+    const [open, setOpen] = useState(false);
     const [expanded, setExpanded] = useState(false); // mobile overlay
     const [active, setActive] = useState(-1);
     const [addTarget, setAddTarget] = useState(null); // { id, listName }
     const [added, setAdded] = useState([]);
+    const [recents, setRecents] = useState(getRecentSearches);
+    const [viewed, setViewed] = useState(getRecentlyViewed);
     const inputRef = useRef(null);
     const rootRef = useRef(null);
 
@@ -51,14 +90,16 @@ export default function Search() {
         setAdded([]);
     }, []);
 
-    // Close on navigation.
     useEffect(() => close(), [pathname, close]);
 
-    // Debounced search; stale responses are aborted.
+    // Debounced search; stale requests are aborted. If nothing matches, retry once
+    // without accents and punctuation before giving up.
     useEffect(() => {
         const q = query.trim();
+        setActive(-1);
         if (!q) {
             setResults([]);
+            setCorrectedTo(null);
             setStatus("idle");
             return;
         }
@@ -66,10 +107,17 @@ export default function Search() {
         const timer = setTimeout(async () => {
             setStatus("loading");
             try {
-                const { results: found } = await searchTitles(q, { signal: controller.signal });
+                const people = !addTarget;
+                let { results: found } = await searchTitles(q, { signal: controller.signal, people });
+                let corrected = null;
+                const simpler = normalise(q);
+                if (!found.length && simpler && simpler.toLowerCase() !== q.toLowerCase()) {
+                    ({ results: found } = await searchTitles(simpler, { signal: controller.signal, people }));
+                    if (found.length) corrected = simpler;
+                }
                 setResults(found.slice(0, MAX));
+                setCorrectedTo(corrected);
                 setStatus("done");
-                setActive(-1);
             } catch (error) {
                 if (error.name !== "AbortError") setStatus("error");
             }
@@ -78,7 +126,15 @@ export default function Search() {
             clearTimeout(timer);
             controller.abort();
         };
-    }, [query]);
+    }, [query, addTarget]);
+
+    const focusSearch = useCallback(() => {
+        setRecents(getRecentSearches());
+        setViewed(getRecentlyViewed());
+        setExpanded(true);
+        setOpen(true);
+        requestAnimationFrame(() => inputRef.current?.focus());
+    }, []);
 
     // "/" or Ctrl/⌘+K focuses search from anywhere.
     useEffect(() => {
@@ -86,29 +142,23 @@ export default function Search() {
             const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
             if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
                 e.preventDefault();
-                setExpanded(true);
-                setOpen(true);
-                requestAnimationFrame(() => inputRef.current?.focus());
+                focusSearch();
             }
         };
         document.addEventListener("keydown", onKey);
         return () => document.removeEventListener("keydown", onKey);
-    }, []);
+    }, [focusSearch]);
 
-    // Add-films mode, opened from a list page.
     useEffect(() => {
         const onAdd = (e) => {
             setAddTarget(e.detail);
             setAdded([]);
-            setExpanded(true);
-            setOpen(true);
-            requestAnimationFrame(() => inputRef.current?.focus());
+            focusSearch();
         };
         window.addEventListener("filmory:add-films", onAdd);
         return () => window.removeEventListener("filmory:add-films", onAdd);
-    }, []);
+    }, [focusSearch]);
 
-    // Outside click closes.
     useEffect(() => {
         if (!open && !expanded) return;
         const onDown = (e) => !rootRef.current?.contains(e.target) && close();
@@ -116,31 +166,55 @@ export default function Search() {
         return () => document.removeEventListener("pointerdown", onDown);
     }, [open, expanded, close]);
 
-    // Group movies first, then series; keyboard order follows the visual order.
+    // Everything the panel can show, as groups of selectable options, in visual order.
     const groups = useMemo(() => {
-        const movies = results.filter((r) => r.media_type === "movie");
-        const tv = results.filter((r) => r.media_type === "tv");
-        return [
-            { label: "Movies", items: movies },
-            { label: "TV shows", items: tv },
+        const q = query.trim();
+        if (!q) {
+            if (addTarget) return [];
+            return [
+                {
+                    label: "Recent searches",
+                    action: recents.length
+                        ? {
+                              label: "Clear",
+                              run: () => {
+                                  clearRecentSearches();
+                                  setRecents([]);
+                              },
+                          }
+                        : null,
+                    items: recents.map((r) => ({ kind: "recent", key: `r-${r}`, text: r })),
+                },
+                {
+                    label: "Recently viewed",
+                    items: viewed.slice(0, 5).map((f) => ({ kind: "viewed", key: `v-${f.type}-${f.id}`, film: f })),
+                },
+            ].filter((g) => g.items.length);
+        }
+        const toItem = (r) =>
+            r.media_type === "person"
+                ? { kind: "person", key: `p-${r.id}`, person: r }
+                : { kind: "title", key: `${r.media_type}-${r.id}`, title: r };
+        const byType = (t) => results.filter((r) => r.media_type === t).map(toItem);
+        const list = [
+            { label: "Movies", items: byType("movie") },
+            { label: "TV shows", items: byType("tv") },
+            { label: "People", items: byType("person") },
         ].filter((g) => g.items.length);
-    }, [results]);
+        if (!addTarget) list.push({ label: null, items: [{ kind: "all", key: "all" }] });
+        return list;
+    }, [query, results, recents, viewed, addTarget]);
     const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
-    const options = addTarget ? flat.length : flat.length + 1; // + "See all results"
 
-    const choose = async (index) => {
-        if (index === flat.length) {
-            navigate(`/discover?q=${encodeURIComponent(query.trim())}`);
-            return;
-        }
-        const item = flat[index];
-        if (!item) return;
-        if (!addTarget) {
-            navigate(`/movieDetails/${item.id}/${item.media_type}`);
-            return;
-        }
+    const remember = () => {
+        addRecentSearch(query);
+        setRecents(getRecentSearches());
+    };
+
+    const addToList = async (item) => {
         const name = item.title || item.name;
         try {
+            const { addMovieToList } = await import("../movie/databaseFetcher");
             await addMovieToList(addTarget.id, item.id, item.media_type);
             invalidateUserLists();
             setAdded((a) => [...a, `${item.media_type}:${item.id}`]);
@@ -152,21 +226,50 @@ export default function Search() {
         }
     };
 
+    const choose = (option) => {
+        if (!option) return;
+        switch (option.kind) {
+            case "recent":
+                setQuery(option.text);
+                inputRef.current?.focus();
+                return;
+            case "viewed":
+                navigate(`/movieDetails/${option.film.id}/${option.film.type}`);
+                return;
+            case "person":
+                remember();
+                navigate(`/person/${option.person.id}`);
+                return;
+            case "all":
+                remember();
+                navigate(`/discover?q=${encodeURIComponent(query.trim())}`);
+                return;
+            default:
+                if (addTarget) {
+                    addToList(option.title);
+                    return;
+                }
+                remember();
+                navigate(`/movieDetails/${option.title.id}/${option.title.media_type}`);
+        }
+    };
+
     const onKeyDown = (e) => {
+        const count = flat.length;
         if (e.key === "ArrowDown") {
             e.preventDefault();
             setOpen(true);
-            setActive((a) => (a + 1) % Math.max(options, 1));
+            if (count) setActive((a) => (a + 1) % count);
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            setActive((a) => (a <= 0 ? options - 1 : a - 1));
+            if (count) setActive((a) => (a <= 0 ? count - 1 : a - 1));
         } else if (e.key === "Enter") {
             if (active >= 0) {
                 e.preventDefault();
-                choose(active);
+                choose(flat[active]);
             } else if (query.trim() && !addTarget) {
                 e.preventDefault();
-                choose(flat.length);
+                choose({ kind: "all" });
             }
         } else if (e.key === "Escape") {
             e.preventDefault();
@@ -178,7 +281,7 @@ export default function Search() {
         }
     };
 
-    const showPanel = open && (query.trim() || addTarget);
+    const showPanel = open && (query.trim() || addTarget || groups.length);
     const optionId = (i) => `search-option-${i}`;
 
     const field = (
@@ -195,16 +298,20 @@ export default function Search() {
                     setQuery(e.target.value);
                     setOpen(true);
                 }}
-                onFocus={() => setOpen(true)}
+                onFocus={() => {
+                    setRecents(getRecentSearches());
+                    setViewed(getRecentlyViewed());
+                    setOpen(true);
+                }}
                 onKeyDown={onKeyDown}
-                placeholder={addTarget ? `Find a film to add` : "Search films and series"}
+                placeholder={addTarget ? "Find a film to add" : "Search films, series and people"}
                 role="combobox"
                 aria-expanded={!!showPanel}
                 aria-controls="search-listbox"
                 aria-autocomplete="list"
                 aria-activedescendant={active >= 0 ? optionId(active) : undefined}
-                aria-label="Search films and series"
-                className="field min-h-[40px] border-transparent bg-leader pl-9 pr-10 transition-[border-color] [&::-webkit-search-cancel-button]:hidden"
+                aria-label="Search films, series and people"
+                className="field min-h-[40px] border-transparent bg-leader pl-9 pr-10 [&::-webkit-search-cancel-button]:hidden"
             />
             {!query && desktop && !addTarget && (
                 <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-[4px] border border-reel px-1.5 font-body text-[13px] leading-5 text-grain">
@@ -227,6 +334,95 @@ export default function Search() {
         </div>
     );
 
+    const renderOption = (option, i) => {
+        const selected = active === i;
+        const common = {
+            id: optionId(i),
+            role: "option",
+            "aria-selected": selected,
+            onMouseEnter: () => setActive(i),
+            onMouseDown: (e) => e.preventDefault(), // keep focus in the field
+            onClick: () => choose(option),
+        };
+        const highlight = selected && (
+            <motion.span
+                layoutId="search-highlight"
+                className="absolute inset-0 rounded-[8px] bg-reel/70"
+                transition={{ duration: 0.18, ease: EASE_OUT }}
+            />
+        );
+
+        if (option.kind === "all") {
+            return (
+                <li key={option.key} {...common} className="relative mt-1 cursor-pointer rounded-[8px] border-t border-reel px-3 py-3 text-screen">
+                    {highlight}
+                    <span className="relative">See all results for “{query.trim()}”</span>
+                </li>
+            );
+        }
+        if (option.kind === "recent") {
+            return (
+                <li key={option.key} {...common} className="relative flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5">
+                    {highlight}
+                    <i className="fa-solid fa-clock-rotate-left relative text-sm text-grain" aria-hidden="true"></i>
+                    <span className="relative truncate">{option.text}</span>
+                </li>
+            );
+        }
+
+        let thumb, name, meta, round = false;
+        if (option.kind === "person") {
+            const p = option.person;
+            round = true;
+            thumb = p.profile_path;
+            name = p.name;
+            const known = (p.known_for || []).map((k) => k.title || k.name).filter(Boolean).slice(0, 2);
+            meta = [p.known_for_department === "Acting" ? "Actor" : p.known_for_department, known.join(", ")].filter(Boolean).join(", ");
+        } else if (option.kind === "viewed") {
+            const f = option.film;
+            thumb = f.poster_path;
+            name = f.title;
+            meta = [f.year, f.type === "tv" ? "TV show" : "Movie"].filter(Boolean).join(", ");
+        } else {
+            const t = option.title;
+            thumb = t.poster_path;
+            name = t.title || t.name;
+            meta = [(t.release_date || t.first_air_date || "").slice(0, 4), t.media_type === "tv" ? "TV show" : "Movie"].filter(Boolean).join(", ");
+        }
+        const isAdded = option.kind === "title" && added.includes(`${option.title.media_type}:${option.title.id}`);
+
+        return (
+            <motion.li
+                key={option.key}
+                {...common}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.015, duration: 0.2 }}
+                className="relative flex cursor-pointer items-center gap-3 rounded-[8px] px-2 py-1.5"
+            >
+                {highlight}
+                <Thumb path={thumb} round={round} name={name} />
+                <span className="relative min-w-0 flex-1">
+                    <span className="block truncate text-grain">
+                        {option.kind === "viewed" ? <span className="text-screen">{name}</span> : <Highlight text={name} query={correctedTo || query} />}
+                    </span>
+                    {meta && <span className="block truncate text-[13px] text-grain">{meta}</span>}
+                </span>
+                {addTarget && option.kind === "title" && (
+                    <span className={`relative shrink-0 text-[13px] ${isAdded ? "text-house" : "text-grain"}`}>
+                        {isAdded ? (
+                            <>
+                                <i className="fa-solid fa-check" aria-hidden="true"></i> Added
+                            </>
+                        ) : (
+                            "Add"
+                        )}
+                    </span>
+                )}
+            </motion.li>
+        );
+    };
+
     let index = -1;
     const panel = (
         <AnimatePresence>
@@ -248,15 +444,20 @@ export default function Search() {
                             </button>
                         </div>
                     )}
+                    {correctedTo && (
+                        <p className="border-b border-reel px-4 py-2 text-[13px] text-grain">
+                            No matches for “{query.trim()}”. Showing results for “{correctedTo}”.
+                        </p>
+                    )}
                     <ul id="search-listbox" role="listbox" aria-label="Search results" className="max-h-[60vh] overflow-y-auto p-1.5">
                         {status === "error" && (
                             <li className="px-3 py-3 text-grain" role="presentation">
                                 Search isn’t responding. Check your connection and try again.
                             </li>
                         )}
-                        {status === "done" && !flat.length && (
+                        {status === "done" && query.trim() && !results.length && (
                             <li className="px-3 py-3 text-grain" role="presentation">
-                                Nothing found for “{query.trim()}”. Try the original title.
+                                Nothing found for “{query.trim()}”. Try the original title, or an actor’s name.
                             </li>
                         )}
                         {addTarget && !query.trim() && (
@@ -265,93 +466,32 @@ export default function Search() {
                             </li>
                         )}
                         {groups.map((group) => (
-                            <li key={group.label} role="presentation">
-                                <p className="px-3 pb-1 pt-2 text-[13px] text-grain" aria-hidden="true">
-                                    {group.label}
-                                </p>
-                                <ul role="group" aria-label={group.label}>
-                                    {group.items.map((item) => {
-                                        index += 1;
-                                        const i = index;
-                                        const name = item.title || item.name;
-                                        const year = (item.release_date || item.first_air_date || "").slice(0, 4);
-                                        const isAdded = added.includes(`${item.media_type}:${item.id}`);
-                                        return (
-                                            <motion.li
-                                                key={`${item.media_type}-${item.id}`}
-                                                id={optionId(i)}
-                                                role="option"
-                                                aria-selected={active === i}
-                                                onMouseEnter={() => setActive(i)}
-                                                onClick={() => choose(i)}
-                                                initial={{ opacity: 0, y: -4 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: i * 0.015, duration: 0.2 }}
-                                                className="relative flex cursor-pointer items-center gap-3 rounded-[8px] px-2 py-1.5"
+                            <li key={group.label || "footer"} role="presentation">
+                                {group.label && (
+                                    <div className="flex items-center justify-between px-3 pb-1 pt-2">
+                                        <p className="text-[13px] text-grain" aria-hidden="true">
+                                            {group.label}
+                                        </p>
+                                        {group.action && (
+                                            <button
+                                                type="button"
+                                                onMouseDown={(e) => e.preventDefault()}
+                                                onClick={group.action.run}
+                                                className="text-[13px] text-grain underline-offset-4 hover:text-screen hover:underline"
                                             >
-                                                {active === i && (
-                                                    <motion.span
-                                                        layoutId="search-highlight"
-                                                        className="absolute inset-0 rounded-[8px] bg-reel/70"
-                                                        transition={{ duration: 0.18, ease: EASE_OUT }}
-                                                    />
-                                                )}
-                                                {item.poster_path ? (
-                                                    <img
-                                                        src={`https://image.tmdb.org/t/p/w92${item.poster_path}`}
-                                                        alt=""
-                                                        loading="lazy"
-                                                        width="46"
-                                                        height="69"
-                                                        className="grain relative h-[69px] w-[46px] shrink-0 rounded-[3px] object-cover"
-                                                    />
-                                                ) : (
-                                                    <span className="grain relative h-[69px] w-[46px] shrink-0 rounded-[3px]" />
-                                                )}
-                                                <span className="relative min-w-0 flex-1">
-                                                    <span className="block truncate text-grain">
-                                                        <Highlight text={name} query={query} />
-                                                    </span>
-                                                    <span className="block text-[13px] text-grain">
-                                                        {[year, item.media_type === "tv" ? "TV show" : "Movie"].filter(Boolean).join(", ")}
-                                                    </span>
-                                                </span>
-                                                {addTarget && (
-                                                    <span className={`relative shrink-0 text-[13px] ${isAdded ? "text-house" : "text-grain"}`}>
-                                                        {isAdded ? (
-                                                            <>
-                                                                <i className="fa-solid fa-check" aria-hidden="true"></i> Added
-                                                            </>
-                                                        ) : (
-                                                            "Add"
-                                                        )}
-                                                    </span>
-                                                )}
-                                            </motion.li>
-                                        );
+                                                {group.action.label}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                                <ul role="group" aria-label={group.label || undefined}>
+                                    {group.items.map((option) => {
+                                        index += 1;
+                                        return renderOption(option, index);
                                     })}
                                 </ul>
                             </li>
                         ))}
-                        {!addTarget && query.trim() && (
-                            <li
-                                id={optionId(flat.length)}
-                                role="option"
-                                aria-selected={active === flat.length}
-                                onMouseEnter={() => setActive(flat.length)}
-                                onClick={() => choose(flat.length)}
-                                className="relative mt-1 cursor-pointer rounded-[8px] border-t border-reel px-3 py-3 text-screen"
-                            >
-                                {active === flat.length && (
-                                    <motion.span
-                                        layoutId="search-highlight"
-                                        className="absolute inset-0 rounded-[8px] bg-reel/70"
-                                        transition={{ duration: 0.18, ease: EASE_OUT }}
-                                    />
-                                )}
-                                <span className="relative">See all results for “{query.trim()}”</span>
-                            </li>
-                        )}
                     </ul>
                 </motion.div>
             )}
@@ -369,16 +509,7 @@ export default function Search() {
 
     return (
         <div ref={rootRef}>
-            <button
-                type="button"
-                aria-label="Search films and series"
-                className="btn btn-icon btn-text"
-                onClick={() => {
-                    setExpanded(true);
-                    setOpen(true);
-                    requestAnimationFrame(() => inputRef.current?.focus());
-                }}
-            >
+            <button type="button" aria-label="Search films, series and people" className="btn btn-icon btn-text" onClick={focusSearch}>
                 <i className="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
             </button>
             <AnimatePresence>

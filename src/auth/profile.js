@@ -1,21 +1,12 @@
-/* eslint-disable react/jsx-no-comment-textnodes */
-import React, { useState, useEffect } from "react";
-import Register from "./register";
-import Logout from "./sett&logout";
+import React from "react";
+import { Navigate } from "react-router-dom";
+import Account from "./sett&logout";
+import Loading from "../static/loading";
+import { useAuth } from "./authContext";
 
+// Logged-out visitors go to log in (and come back here), not to account creation.
 export default function Profile() {
-    const [loggedInUser, setLoggedInUser] = useState(
-        localStorage.getItem("loggedInUser")
-    );
-
-    useEffect(() => {
-        const handleStorageChange = () => {
-            setLoggedInUser(localStorage.getItem("loggedInUser"));
-        };
-        window.addEventListener("storage", handleStorageChange);
-
-        return () => window.removeEventListener("storage", handleStorageChange);
-    }, []);
-
-    return <>{loggedInUser ? <Logout /> : <Register />}</>;
+    const { ready, user } = useAuth();
+    if (!ready) return <Loading />;
+    return user ? <Account /> : <Navigate to="/login?next=%2Fprofile" replace />;
 }

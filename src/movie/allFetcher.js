@@ -1,3 +1,4 @@
+import { getJson } from "./http";
 const POPULAR_MOVIES =
     "https://api.themoviedb.org/3/movie/popular?api_key=8dc69cc265c5c8924c21ede4b9ddc208"; // working properly
 
@@ -31,9 +32,7 @@ const tmdb = async (path, params = {}, signal) => {
         if (value !== undefined && value !== null && value !== "")
             url.searchParams.set(key, value);
     }
-    const response = await fetch(url, { signal });
-    if (!response.ok) throw new Error(`TMDB ${response.status}`);
-    return response.json();
+    return getJson(url.toString(), { signal });
 };
 
 // TMDB never serves past page 500.
@@ -61,13 +60,42 @@ const SORTS = {
     }),
 };
 
-export const discoverTitles = async ({ type, year, genres = [], sort = "popular", page = 1 }) => {
+export const discoverTitles = async ({
+    type,
+    year,
+    genres = [],
+    sort = "popular",
+    page = 1,
+    runtimeMax,
+    minRating,
+    language,
+    providers = [],
+    region,
+    cast,
+    keywords,
+}) => {
     try {
+        const sorting = (SORTS[sort] || SORTS.popular)(type);
         const data = await tmdb(`/discover/${type}`, {
             page,
             with_genres: genres.join(","),
             [type === "tv" ? "first_air_date_year" : "primary_release_year"]: year,
-            ...(SORTS[sort] || SORTS.popular)(type),
+            ...sorting,
+            "with_runtime.lte": runtimeMax,
+            ...(minRating && {
+                "vote_average.gte": minRating,
+                "vote_count.gte": Math.max(sorting["vote_count.gte"] || 0, 50),
+            }),
+            with_original_language: language,
+            // "|" = any of these services
+            ...(providers.length && {
+                with_watch_providers: providers.join("|"),
+                watch_region: region,
+                with_watch_monetization_types: "flatrate|free|ads",
+            }),
+            with_cast: type === "movie" ? cast : undefined,
+            with_people: type === "tv" ? cast : undefined,
+            with_keywords: keywords,
         });
         return {
             results: data.results || [],
@@ -80,12 +108,12 @@ export const discoverTitles = async ({ type, year, genres = [], sort = "popular"
     }
 };
 
-// Movies and series together. Aborts propagate so callers can ignore stale requests.
-export const searchTitles = async (query, { signal, page = 1 } = {}) => {
+// Movies and series together (and people, if asked). Aborts propagate so callers can ignore stale requests.
+export const searchTitles = async (query, { signal, page = 1, people = false } = {}) => {
     const data = await tmdb("/search/multi", { query, page, include_adult: false }, signal);
     return {
         results: (data.results || []).filter(
-            (r) => r.media_type === "movie" || r.media_type === "tv"
+            (r) => r.media_type === "movie" || r.media_type === "tv" || (people && r.media_type === "person")
         ),
         totalResults: data.total_results || 0,
         totalPages: Math.min(data.total_pages || 1, MAX_PAGES),
@@ -99,6 +127,49 @@ export const fetchRecommendations = async (type, id) => {
         return (data.results || []).filter((r) => String(r.id) !== String(id));
     } catch (error) {
         console.error("Error fetching recommendations:", error);
+        return [];
+    }
+};
+
+export const fetchPerson = async (id) => {
+    try {
+        return await tmdb(`/person/${id}`, { append_to_response: "combined_credits" });
+    } catch (error) {
+        console.error("Error fetching person:", error);
+        return null;
+    }
+};
+
+export const fetchSeason = async (tvId, season) => {
+    try {
+        return await tmdb(`/tv/${tvId}/season/${season}`);
+    } catch (error) {
+        console.error("Error fetching season:", error);
+        return null;
+    }
+};
+
+// Streaming services available in a region, most prominent first.
+export const fetchProviders = async (type, region) => {
+    try {
+        const data = await tmdb(`/watch/providers/${type}`, { watch_region: region });
+        return (data.results || []).sort(
+            (a, b) =>
+                (a.display_priorities?.[region] ?? a.display_priority ?? 999) -
+                (b.display_priorities?.[region] ?? b.display_priority ?? 999)
+        );
+    } catch (error) {
+        console.error("Error fetching providers:", error);
+        return [];
+    }
+};
+
+export const fetchWatchRegions = async () => {
+    try {
+        const data = await tmdb("/watch/providers/regions");
+        return data.results || [];
+    } catch (error) {
+        console.error("Error fetching regions:", error);
         return [];
     }
 };
@@ -124,8 +195,7 @@ export const fetchTitleBasic = (type, id) => {
 
 export const fetchAllPopularMovies = async () => {
     try {
-        const response = await fetch(POPULAR_MOVIES);
-        const data = await response.json();
+        const data = await getJson(POPULAR_MOVIES);
         return data.results; // Return the list of movies
     } catch (error) {
         console.error("Error fetching all movies data:", error);
@@ -135,8 +205,7 @@ export const fetchAllPopularMovies = async () => {
 
 export const fetchAllLatestMovies = async () => {
     try {
-        const response = await fetch(LATEST_MOVIES);
-        const data = await response.json();
+        const data = await getJson(LATEST_MOVIES);
         return data.results; // Return the list of series
     } catch (error) {
         console.error("Error fetching all series data:", error);
@@ -145,8 +214,7 @@ export const fetchAllLatestMovies = async () => {
 };
 export const fetchPopularSeries = async () => {
     try {
-        const response = await fetch(POPULAR_SERIES);
-        const data = await response.json();
+        const data = await getJson(POPULAR_SERIES);
         return data.results; // Return the list of series
     } catch (error) {
         console.error("Error fetching all series data:", error);
@@ -156,8 +224,7 @@ export const fetchPopularSeries = async () => {
 
 export const fetchLatestSeries = async () => {
     try {
-        const response = await fetch(LATEST_SERIES);
-        const data = await response.json();
+        const data = await getJson(LATEST_SERIES);
         return data.results; // Return the list of series
     } catch (error) {
         console.error("Error fetching all series data:", error);
@@ -167,12 +234,11 @@ export const fetchLatestSeries = async () => {
 
 export const fetchMoviesByGenres = async (genreIds) => {
     try {
-        const response = await fetch(
+        const data = await getJson(
             `https://api.themoviedb.org/3/discover/movie?api_key=8dc69cc265c5c8924c21ede4b9ddc208&with_genres=${genreIds.join(
                 ","
             )}`
         );
-        const data = await response.json();
         return data.results; // Return list of movies
     } catch (error) {
         console.error("Error fetching movies by genres:", error);
@@ -182,12 +248,11 @@ export const fetchMoviesByGenres = async (genreIds) => {
 
 export const fetchSeriesByGenres = async (genreIds) => {
     try {
-        const response = await fetch(
+        const data = await getJson(
             `https://api.themoviedb.org/3/discover/tv?api_key=8dc69cc265c5c8924c21ede4b9ddc208&with_genres=${genreIds.join(
                 ","
             )}`
         );
-        const data = await response.json();
         return data.results; // Return list of TV series
     } catch (error) {
         console.error("Error fetching TV series by genres:", error);
@@ -197,10 +262,9 @@ export const fetchSeriesByGenres = async (genreIds) => {
 
 export const fetchAllPopularMoviesByPage = async (page) => {
     try {
-        const response = await fetch(
+        const data = await getJson(
             `https://api.themoviedb.org/3/movie/popular?api_key=8dc69cc265c5c8924c21ede4b9ddc208&page=${page}`
         );
-        const data = await response.json();
         return data.results; // Return the list of movies
     } catch (error) {
         console.error("Error fetching all movies data:", error);
@@ -210,10 +274,9 @@ export const fetchAllPopularMoviesByPage = async (page) => {
 
 export const fetchAllPopularSeriesByPage = async (page) => {
     try {
-        const response = await fetch(
+        const data = await getJson(
             `https://api.themoviedb.org/3/tv/on_the_air?api_key=8dc69cc265c5c8924c21ede4b9ddc208&page=${page}`
         );
-        const data = await response.json();
         return data.results; // Return the list of movies
     } catch (error) {
         console.error("Error fetching all movies data:", error);
@@ -223,8 +286,7 @@ export const fetchAllPopularSeriesByPage = async (page) => {
 
 export const fetchMovieGeneres = async () => {
     try {
-        const response = await fetch(MOVIE_GENERES);
-        const data = await response.json();
+        const data = await getJson(MOVIE_GENERES);
         return data.genres?.map((genre) => genre) || []; // Return the list of genres
     } catch (error) {
         console.error("Error fetching movie genres:", error);
@@ -234,8 +296,7 @@ export const fetchMovieGeneres = async () => {
 
 export const fetchSeriesGeneres = async () => {
     try {
-        const response = await fetch(SERIES_GENERES);
-        const data = await response.json();
+        const data = await getJson(SERIES_GENERES);
         return data.genres?.map((genre) => genre) || []; // Return the list of genres
     } catch (error) {
         console.error("Error fetching movie genres:", error);
@@ -245,8 +306,7 @@ export const fetchSeriesGeneres = async () => {
 
 export const fetchAllCountries = async () => {
     try {
-        const response = await fetch(COUNTRIES);
-        const data = await response.json();
+        const data = await getJson(COUNTRIES);
         return data.map((country) => country) || []; // Directly map over the array
     } catch (error) {
         console.error("Error fetching countries data:", error);
@@ -269,8 +329,7 @@ export const filteredFetcher = async (type, releaseYear, genres, country) => {
                 ? `${BASE_URL}/discover/movie?api_key=8dc69cc265c5c8924c21ede4b9ddc208${genreParam}${countryParam}${yearParam}`
                 : `${BASE_URL}/discover/tv?api_key=8dc69cc265c5c8924c21ede4b9ddc208${genreParam}${countryParam}${yearParam}`;
 
-        const response = await fetch(url);
-        const data = await response.json();
+        const data = await getJson(url);
         return data.results || [];
     } catch (error) {
         console.error("Error fetching filtered results:", error);
@@ -280,10 +339,9 @@ export const filteredFetcher = async (type, releaseYear, genres, country) => {
 
 export const fetchAllMoviesBySearchQuery = async (searchTerm) => {
     try {
-        const response = await fetch(
+        const data = await getJson(
             `https://api.themoviedb.org/3/search/movie?api_key=8dc69cc265c5c8924c21ede4b9ddc208&query=${searchTerm}`
         );
-        const data = await response.json();
         return data.results; // Return list of movies and TV series
     } catch (error) {
         console.error("Error fetching movies by search:", error);
@@ -293,10 +351,9 @@ export const fetchAllMoviesBySearchQuery = async (searchTerm) => {
 
 export const fetchAllSeriesBySearchQuery = async (searchTerm) => {
     try {
-        const response = await fetch(
+        const data = await getJson(
             `https://api.themoviedb.org/3/search/tv?api_key=8dc69cc265c5c8924c21ede4b9ddc208&query=${searchTerm}`
         );
-        const data = await response.json();
         return data.results; // Return list of movies and TV series
     } catch (error) {
         console.error("Error fetching movies by search:", error);

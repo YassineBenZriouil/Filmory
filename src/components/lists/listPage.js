@@ -12,8 +12,8 @@ import {
     addMovieToList,
     deleteListHandler,
     fetchListById,
-    fetchUserData,
-    fetchingUserUIDByEmail,
+    currentUid,
+    fetchProfile,
     handlepublication,
     removeItemFromList,
     worksOf,
@@ -22,6 +22,7 @@ import { invalidateUserLists } from "../../movie/listsStore";
 import { LIST_CHANGED, openAddFilms } from "../search";
 import ListMenu from "./listMenu";
 import ListSheet from "./listSheet";
+import { useAuth } from "../../auth/authContext";
 
 const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
 
@@ -30,6 +31,7 @@ const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
 export default function ListPage({ publicRoute = false }) {
     const { id } = useParams();
     const navigate = useNavigate();
+    const uid = useAuth().user?.uid;
     const [list, setList] = useState(undefined); // undefined loading, null missing
     const [films, setFilms] = useState(null);
     const [owner, setOwner] = useState(false);
@@ -49,7 +51,7 @@ export default function ListPage({ publicRoute = false }) {
 
     const load = useCallback(async () => {
         try {
-            const [data, uid] = await Promise.all([fetchListById(id), fetchingUserUIDByEmail()]);
+            const [data, uid] = await Promise.all([fetchListById(id), currentUid()]);
             if (!data) return setList(null);
             const isOwner = !!uid && data.user === `/Users/${uid}`;
             if (!isOwner && !data.isPublic) return setList(null);
@@ -57,12 +59,14 @@ export default function ListPage({ publicRoute = false }) {
             setList({ id, ...data });
             loadFilms(data);
             const userId = typeof data.user === "string" ? data.user.split("/").pop() : null;
-            if (userId) fetchUserData(userId).then(setAuthor);
+            if (userId) fetchProfile(userId).then((p) => setAuthor(p || { userName: "" }));
         } catch (error) {
             console.error("Error fetching the list:", error);
             setList(null);
         }
-    }, [id, loadFilms]);
+        // Re-check ownership when someone signs in or out on this page.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id, loadFilms, uid]);
 
     useEffect(() => {
         load();
@@ -186,14 +190,14 @@ export default function ListPage({ publicRoute = false }) {
 
             <header className="mt-4 flex flex-wrap items-start justify-between gap-6">
                 <div className="min-w-0">
-                    <h1 className="text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[49px] lg:text-[61px]">
+                    <h1 className="break-words text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[49px] lg:text-[61px]">
                         {list.listName}
                     </h1>
                     <p className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-grain">
                         <span className="flex items-center gap-2">
                             {author ? (
                                 <>
-                                    <Avatar name={author.userName} fallback={author.email} size="h-6 w-6 text-xs" />
+                                    <Avatar name={author.userName} size="h-6 w-6 text-xs" />
                                     By {owner ? "you" : author.userName || "someone"}
                                 </>
                             ) : (

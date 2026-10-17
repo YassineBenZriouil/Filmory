@@ -1,10 +1,14 @@
 import React, { Children, useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { entryState } from "../static/scroll";
 import { useReducedMotion } from "framer-motion";
 
 // A titled, sideways-scrolling row of cards that bleeds off the right edge.
-export default function CardRow({ title, seeAll, children }) {
+export default function CardRow({ title, seeAll, children, failed, onRetry }) {
     const ref = useRef(null);
+    const { key: entryKey } = useLocation();
+    const memoryKey = `row:${entryKey}:${title}`;
+    const restored = useRef(false);
     const reduce = useReducedMotion();
     const [atStart, setAtStart] = useState(true);
     const [atEnd, setAtEnd] = useState(false);
@@ -16,6 +20,21 @@ export default function CardRow({ title, seeAll, children }) {
         setAtStart(el.scrollLeft < 4);
         setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
     }, []);
+
+    // Come back to the same sideways position (e.g. after opening a film and pressing Back).
+    useEffect(() => {
+        if (restored.current || !count || !ref.current) return;
+        restored.current = true;
+        const left = entryState.get(memoryKey);
+        if (left) ref.current.scrollLeft = left;
+    }, [count, memoryKey]);
+
+    const saveTimer = useRef(null);
+    const onScroll = () => {
+        update();
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => entryState.set(memoryKey, ref.current?.scrollLeft || 0), 150);
+    };
 
     useEffect(() => {
         update();
@@ -63,12 +82,21 @@ export default function CardRow({ title, seeAll, children }) {
             <div className="relative">
                 <div
                     ref={ref}
-                    onScroll={update}
+                    onScroll={onScroll}
                     className={`row-scroller page-x flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 pb-3 pt-1 md:scroll-px-8 xl:scroll-px-[72px] ${
                         atStart ? "" : "fade-start"
                     } ${atEnd ? "" : "fade-end"}`}
                 >
-                    {count
+                    {failed && !count ? (
+                        <div className="flex min-h-[120px] items-center gap-4 text-grain">
+                            <p>This row didn’t load.</p>
+                            {onRetry && (
+                                <button type="button" className="btn btn-secondary" onClick={onRetry}>
+                                    Try again
+                                </button>
+                            )}
+                        </div>
+                    ) : count
                         ? Children.map(children, (child) => (
                               <div className="w-[140px] shrink-0 snap-start sm:w-[160px] md:w-[200px]">
                                   {child}

@@ -1,11 +1,14 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { loginPath, useAuth } from "../auth/authContext";
+import { CreditLine, Keywords, Seasons, WhereToWatch } from "./detailsExtras";
+import { addRecentlyViewed } from "../static/prefs";
 import { fetchOneMovie, fetchOneSerie } from "./../movie/oneFetcher";
 import { fetchRecommendations } from "./../movie/allFetcher";
 import Loading from "../static/loading";
 import SmallCard from "./smallCard";
 import CardRow from "./cardRow";
-import ListPicker from "./listPicker";
+import ListPicker from "./lazyListPicker";
 import Dialog from "../static/dialog";
 import { flipFrom, takePoster } from "../static/morph";
 import { prefersReducedMotion } from "../static/hooks";
@@ -79,6 +82,7 @@ function CastRow({ cast }) {
             <ul className="row-scroller page-x flex snap-x gap-5 overflow-x-auto pb-2 scroll-px-4 md:scroll-px-8">
                 {cast.map((person) => (
                     <li key={person.credit_id || person.id} className="w-[96px] shrink-0 snap-start">
+                        <Link to={`/person/${person.id}`} className="group block">
                         {person.profile_path ? (
                             <img
                                 src={`https://image.tmdb.org/t/p/w185${person.profile_path}`}
@@ -86,17 +90,18 @@ function CastRow({ cast }) {
                                 loading="lazy"
                                 width="72"
                                 height="72"
-                                className="grain h-[72px] w-[72px] rounded-full object-cover"
+                                className="grain h-[72px] w-[72px] rounded-full object-cover transition-shadow duration-quick group-hover:shadow-[0_0_0_2px_rgb(var(--beam))]"
                             />
                         ) : (
                             <span className="grid h-[72px] w-[72px] place-items-center rounded-full bg-leader font-display text-2xl font-extrabold text-grain">
                                 {initialsOf(person.name)}
                             </span>
                         )}
-                        <p className="mt-2 font-bold leading-snug">{person.name}</p>
+                        <p className="mt-2 font-bold leading-snug group-hover:underline group-hover:decoration-beam group-hover:underline-offset-4">{person.name}</p>
                         {person.character && (
                             <p className="text-[13px] leading-snug text-grain">{person.character}</p>
                         )}
+                        </Link>
                     </li>
                 ))}
             </ul>
@@ -107,18 +112,21 @@ function CastRow({ cast }) {
 export default function MovieDetails() {
     const { id, type } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [film, setFilm] = useState(undefined); // undefined = loading, null = failed
+    const [attempt, setAttempt] = useState(0);
     const [more, setMore] = useState([]);
     const [picker, setPicker] = useState(false);
     const [trailerOpen, setTrailerOpen] = useState(false);
     const [posterLoaded, setPosterLoaded] = useState(false);
     const addRef = useRef(null);
     const posterRef = useRef(null);
-    const loggedIn = !!localStorage.getItem("loggedInUser");
+    const loggedIn = !!useAuth().user;
 
     useEffect(() => {
         let alive = true;
         const fetcher = type === "tv" ? fetchOneSerie : fetchOneMovie;
+        setFilm(undefined);
         fetcher(id).then((data) => {
             if (!alive) return;
             setFilm(data && data.id ? data : null);
@@ -127,13 +135,29 @@ export default function MovieDetails() {
         return () => {
             alive = false;
         };
-    }, [id, type]);
+    }, [id, type, attempt]);
 
     const title = film && (type === "tv" ? film.name : film.title);
 
     useEffect(() => {
-        if (title) document.title = `${title} – ${brand}`;
+        if (!title) return;
+        document.title = `${title} – ${brand}`;
+        addRecentlyViewed({
+            id: film.id,
+            type: type === "tv" ? "tv" : "movie",
+            title,
+            poster_path: film.poster_path,
+            year: (type === "tv" ? film.first_air_date : film.release_date)?.slice(0, 4),
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [title]);
+
+    // Came back from logging in after pressing "Log in to save": finish adding.
+    useEffect(() => {
+        if (!film || !loggedIn || location.state?.intent !== "add") return;
+        setPicker(true);
+        navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    }, [film, loggedIn, location, navigate]);
 
     // Arriving from a "More like this" card: fly the poster in from where the card was.
     useLayoutEffect(() => {
@@ -148,10 +172,15 @@ export default function MovieDetails() {
         return (
             <div className="page flex min-h-[60vh] flex-col items-start justify-center gap-6">
                 <h1 className="page-title">This title couldn’t be loaded</h1>
-                <p className="text-grain">It may have been removed from TMDB, or the connection dropped.</p>
-                <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
-                    Go back
-                </button>
+                <p className="text-grain">The connection may have dropped, or TMDB removed it.</p>
+                <div className="flex flex-wrap gap-3">
+                    <button type="button" className="btn btn-primary" onClick={() => setAttempt((n) => n + 1)}>
+                        Try again
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+                        Go back
+                    </button>
+                </div>
             </div>
         );
     }
@@ -211,7 +240,7 @@ export default function MovieDetails() {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                    <h1 className="text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[61px] lg:text-[76px]">
+                    <h1 className="break-words text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[61px] lg:text-[76px]">
                         {title}
                     </h1>
                     <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-grain">
@@ -229,6 +258,7 @@ export default function MovieDetails() {
                         )}
                         {genres.length > 0 && <span>{genres.join(", ")}</span>}
                     </p>
+                    <CreditLine film={film} type={type} />
 
                     <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
                         {rating !== null ? (
@@ -239,7 +269,7 @@ export default function MovieDetails() {
                                 <span className="flex flex-col gap-1.5">
                                     <RatingBar value={rating} />
                                     <span className="text-[13px] text-grain">
-                                        from {film.vote_count.toLocaleString()} ratings
+                                        from {film.vote_count.toLocaleString()} TMDB ratings
                                     </span>
                                 </span>
                                 <span className="sr-only">Rated {rating.toFixed(1)} out of 10</span>
@@ -263,7 +293,7 @@ export default function MovieDetails() {
                                 <i className={`fa-solid fa-chevron-down text-xs transition-transform duration-quick ${picker ? "rotate-180" : ""}`} aria-hidden="true"></i>
                             </button>
                         ) : (
-                            <Link to="/login" className="btn btn-primary">
+                            <Link to={loginPath(location, "add")} className="btn btn-primary">
                                 Log in to save
                             </Link>
                         )}
@@ -282,6 +312,8 @@ export default function MovieDetails() {
                 <div className="hidden lg:block" />
                 <div className="space-y-10">
                     <p className="max-w-[68ch] text-lg leading-relaxed">{film.overview || "No synopsis yet."}</p>
+                    <WhereToWatch data={film["watch/providers"]} />
+                    {type === "tv" && <Seasons tvId={film.id} seasons={film.seasons} />}
                     {details.length > 0 && (
                         <section aria-labelledby="details-title">
                             <h2 id="details-title" className="text-[25px] font-semibold md:text-[31px]">
@@ -297,6 +329,7 @@ export default function MovieDetails() {
                             </dl>
                         </section>
                     )}
+                    <Keywords film={film} type={type} />
                 </div>
             </div>
 

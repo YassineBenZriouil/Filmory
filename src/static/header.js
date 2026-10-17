@@ -4,10 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Lens from "./lens";
 import Search from "../components/search";
 import { initialsOf } from "./avatar";
-import {
-    fetchingUserUIDByEmail,
-    fetchUserData,
-} from "../movie/databaseFetcher";
+import { loginPath, useAuth } from "../auth/authContext";
 
 const NAV = [
     { to: "/", label: "Home" },
@@ -23,36 +20,12 @@ const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
 const isActive = (pathname, to) =>
     to === "/" ? pathname === "/" : pathname.toLowerCase() === to.toLowerCase();
 
-// Who is logged in, re-read on every route change (login/logout happen in this tab,
-// where the storage event never fires).
-function useCurrentUser(pathname) {
-    const [email, setEmail] = useState(localStorage.getItem("loggedInUser"));
-    const [name, setName] = useState("");
-
-    useEffect(() => {
-        setEmail(localStorage.getItem("loggedInUser"));
-    }, [pathname]);
-
-    useEffect(() => {
-        let alive = true;
-        setName("");
-        if (!email) return;
-        (async () => {
-            const uid = await fetchingUserUIDByEmail();
-            const data = uid && (await fetchUserData(uid));
-            if (alive && data?.userName) setName(data.userName);
-        })();
-        return () => {
-            alive = false;
-        };
-    }, [email]);
-
-    return { email, name };
-}
-
 export default function Header() {
-    const { pathname } = useLocation();
-    const { email, name } = useCurrentUser(pathname);
+    const location = useLocation();
+    const { pathname } = location;
+    const { ready, user, profile: account } = useAuth();
+    const email = user?.email;
+    const name = account?.userName;
     const [open, setOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const burgerRef = useRef(null);
@@ -88,7 +61,9 @@ export default function Header() {
         }
     }, [open]);
 
-    const profile = email ? (
+    const profile = !ready ? (
+        <span className="skeleton block h-9 w-9 rounded-full" aria-hidden="true" />
+    ) : email ? (
         <Link
             to="/profile"
             aria-label="Your profile"
@@ -97,7 +72,7 @@ export default function Header() {
             {initialsOf(name, email)}
         </Link>
     ) : (
-        <Link to="/login" className="btn btn-text">
+        <Link to={pathname === "/login" || pathname === "/register" ? "/login" : loginPath(location)} className="btn btn-text">
             Log in
         </Link>
     );
@@ -243,7 +218,7 @@ export default function Header() {
                                         {name || email}
                                     </Link>
                                 ) : (
-                                    <Link to="/login" className="btn btn-primary w-full">
+                                    <Link to={loginPath(location)} className="btn btn-primary w-full">
                                         Log in
                                     </Link>
                                 )}

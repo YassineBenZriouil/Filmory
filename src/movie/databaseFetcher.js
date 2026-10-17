@@ -1,6 +1,6 @@
 import {
-    getFirestore,
     collection,
+    setDoc,
     query,
     where,
     getDocs,
@@ -12,11 +12,11 @@ import {
     arrayUnion,
     arrayRemove,
 } from "firebase/firestore";
-import { db } from "../auth/firebase";
+import { db } from "../auth/firestore";
+import { auth } from "../auth/firebase";
 
 export const fetchCurrentUserLists = async () => {
-    const db = getFirestore();
-    const userUID = await fetchingUserUIDByEmail();
+    const userUID = await currentUid();
     if (!userUID) {
         console.log("No user found for the provided email");
         return [];
@@ -31,7 +31,6 @@ export const fetchCurrentUserLists = async () => {
 };
 
 export const addListhandler = async (list) => {
-    const db = getFirestore();
     const listsRef = collection(db, "Mylists");
     const ref = await addDoc(listsRef, list);
     return ref.id;
@@ -50,57 +49,53 @@ export const filmCount = (list) => {
 };
 
 export const editListHandler = async (listId, updatedList) => {
-    const db = getFirestore();
     const listRef = doc(db, "Mylists", listId);
     await updateDoc(listRef, updatedList);
 };
 
-let uidCache = { email: null, uid: null };
+// The signed-in user's id. Waits for Firebase to restore the session on page load.
+export const currentUid = async () => {
+    await auth.authStateReady();
+    return auth.currentUser?.uid || null;
+};
 
-export const fetchingUserUIDByEmail = async () => {
-    const email = localStorage.getItem("loggedInUser");
-    if (!email) {
+// Public, name-only profile used for list authors. Users/{uid} (with the email) stays private.
+export const fetchProfile = async (uid) => {
+    try {
+        const snap = await getDoc(doc(db, "Profiles", uid));
+        return snap.exists() ? snap.data() : null;
+    } catch (error) {
+        console.error("Error fetching profile:", error);
         return null;
     }
-    if (uidCache.email === email) return uidCache.uid;
-    const db = getFirestore();
-    const usersRef = collection(db, "Users");
-    const userQuery = query(usersRef, where("email", "==", email));
-    const userSnapshot = await getDocs(userQuery);
-    if (userSnapshot.empty) {
-        console.log("No user found for this email");
-        return null;
+};
+
+export const saveProfile = (uid, userName) => setDoc(doc(db, "Profiles", uid), { userName }, { merge: true });
+
+// The signed-in user's own details; creates their public profile if it's missing
+// (accounts made before profiles existed).
+export const loadOwnProfile = async (user) => {
+    try {
+        const [own, pub] = await Promise.all([
+            getDoc(doc(db, "Users", user.uid)),
+            getDoc(doc(db, "Profiles", user.uid)),
+        ]);
+        const userName = own.data()?.userName || pub.data()?.userName || "";
+        if (userName && !pub.exists()) saveProfile(user.uid, userName).catch(() => {});
+        return { userName, email: user.email };
+    } catch (error) {
+        console.error("Error loading profile:", error);
+        return { userName: "", email: user.email };
     }
-    uidCache = { email, uid: userSnapshot.docs[0].id };
-    return uidCache.uid;
 };
 
 export const deleteListHandler = async (listId) => {
-    const db = getFirestore();
     const listRef = doc(db, "Mylists", listId);
     await deleteDoc(listRef);
 };
 
-export const searchListByQuery = async (searchQuery) => {
-    const db = getFirestore();
-    const listsRef = collection(db, "Mylists");
-    const listsSnapshot = await getDocs(listsRef);
-    return listsSnapshot.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter(
-            (list) =>
-                list.listName
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase()) ||
-                list.description
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase())
-        );
-};
-
 export const addMovieToList = async (listId, itemId, type) => {
     try {
-        const db = getFirestore();
         const listRef = doc(db, "Mylists", listId);
         const updateData = {};
         const itemIdAsNumber = parseInt(itemId, 10);
@@ -125,14 +120,12 @@ export const addMovieToList = async (listId, itemId, type) => {
 };
 
 export const fetchListById = async (listId) => {
-    const db = getFirestore();
     const listRef = doc(db, "Mylists", listId);
     const listSnapshot = await getDoc(listRef);
     return listSnapshot.exists() ? listSnapshot.data() : null;
 };
 
 export const removeItemFromList = async (listId, itemId, type) => {
-    const db = getFirestore();
     const listRef = doc(db, "Mylists", listId);
     try {
         const listSnap = await getDoc(listRef);
@@ -175,7 +168,6 @@ export const removeItemFromList = async (listId, itemId, type) => {
 };
 
 export const handlepublication = async (listId) => {
-    const db = getFirestore();
     const listRef = doc(db, "Mylists", listId);
     const listSnapshot = await getDoc(listRef);
     const isPublic = listSnapshot.data().isPublic;
@@ -184,31 +176,9 @@ export const handlepublication = async (listId) => {
 };
 
 export const fetchAllPublicLists = async () => {
-    const db = getFirestore();
     const listsRef = collection(db, "Mylists");
     const listsQuery = query(listsRef, where("isPublic", "==", true));
     const listsSnapshot = await getDocs(listsQuery);
     return listsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 };
 
-export const fetchUserData = async (userRef) => {
-    let userDocumentRef = userRef;
-
-    // If userRef is just an ID (string), create a proper reference
-    if (typeof userRef === "string") {
-        userDocumentRef = doc(db, "Users", userRef); // Correct the path to "Users/{userId}"
-    }
-
-    try {
-        const userDocument = await getDoc(userDocumentRef);
-        if (userDocument.exists()) {
-            return userDocument.data(); // Return the user data if the document exists
-        } else {
-            console.log("User not found");
-            return null;
-        }
-    } catch (error) {
-        console.error("Error fetching user data:", error);
-        return null;
-    }
-};

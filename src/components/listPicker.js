@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { loginPath, useAuth } from "../auth/authContext";
 import { motion } from "framer-motion";
 import Popover from "../static/popover";
 import { customToast } from "../static/toast";
 import {
     addListhandler,
     addMovieToList,
-    fetchingUserUIDByEmail,
+    currentUid,
     removeItemFromList,
     worksOf,
 } from "../movie/databaseFetcher";
@@ -39,7 +40,8 @@ function Tick({ on }) {
 
 // Which of the user's lists hold this film. Toggling a row saves straight away.
 export default function ListPicker({ anchorRef, open, onClose, id, type, title }) {
-    const loggedIn = !!localStorage.getItem("loggedInUser");
+    const location = useLocation();
+    const loggedIn = !!useAuth().user;
     const [lists, setLists] = useState(cachedUserLists);
     const [newName, setNewName] = useState("");
     const [creating, setCreating] = useState(false);
@@ -89,7 +91,7 @@ export default function ListPicker({ anchorRef, open, onClose, id, type, title }
         if (!listName || creating) return;
         setCreating(true);
         try {
-            const uid = await fetchingUserUIDByEmail();
+            const uid = await currentUid();
             if (!uid) throw new Error("Not logged in");
             const list = {
                 listName,
@@ -118,7 +120,7 @@ export default function ListPicker({ anchorRef, open, onClose, id, type, title }
             {!loggedIn ? (
                 <div className="space-y-3 p-3">
                     <p className="text-grain">Log in to save films to your lists.</p>
-                    <Link to="/login" className="btn btn-primary w-full">
+                    <Link to={loginPath(location)} className="btn btn-primary w-full">
                         Log in
                     </Link>
                 </div>

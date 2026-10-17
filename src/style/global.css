@@ -133,6 +133,7 @@
     .page-title {
         @apply font-display text-[39px] font-extrabold leading-[0.95] md:text-[49px];
         letter-spacing: -0.01em;
+        overflow-wrap: break-word;
     }
 
     /* Buttons: primary, secondary, text, destructive */
@@ -358,6 +359,24 @@
     transform: translateX(-100%);
     animation: skeleton-sweep 1.6s var(--ease-reel) infinite;
 }
+/* Log-in poster wall: each column is its posters twice, so -50% loops seamlessly */
+.poster-drift {
+    animation: poster-drift linear infinite;
+}
+.poster-drift-reverse {
+    animation-direction: reverse;
+}
+@keyframes poster-drift {
+    to {
+        transform: translateY(-50%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .poster-drift {
+        animation: none;
+    }
+}
+
 @keyframes search-sweep {
     from {
         transform: translateX(-100%);

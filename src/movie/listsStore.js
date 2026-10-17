@@ -1,15 +1,17 @@
-import { fetchCurrentUserLists } from "./databaseFetcher";
+import { auth } from "../auth/firebase";
 
 // The current user's lists, kept briefly so the list picker opens instantly.
-let cache = null; // { email, lists }
+let cache = null; // { uid, lists }
 
 export const cachedUserLists = () =>
-    cache?.email === localStorage.getItem("loggedInUser") ? cache.lists : null;
+    cache && cache.uid === auth.currentUser?.uid ? cache.lists : null;
 
 export const loadUserLists = async () => {
-    const email = localStorage.getItem("loggedInUser");
-    const lists = email ? await fetchCurrentUserLists() : [];
-    cache = { email, lists };
+    // Firestore loads on demand, not with the first page.
+    const { currentUid, fetchCurrentUserLists } = await import("./databaseFetcher");
+    const uid = await currentUid();
+    const lists = uid ? await fetchCurrentUserLists() : [];
+    cache = { uid, lists };
     return lists;
 };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { loginPath, useAuth } from "../../auth/authContext";
 import { AnimatePresence, motion } from "framer-motion";
 import { deleteListHandler, filmCount, handlepublication } from "../../movie/databaseFetcher";
 import { invalidateUserLists, loadUserLists } from "../../movie/listsStore";
@@ -14,7 +15,9 @@ const GRID = "grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5";
 export default function MyLists({ sheet: initialSheet }) {
     const navigate = useNavigate();
     const { listId } = useParams();
-    const loggedIn = !!localStorage.getItem("loggedInUser");
+    const location = useLocation();
+    const { ready, user } = useAuth();
+    const loggedIn = !!user;
     const [lists, setLists] = useState(null);
     const [query, setQuery] = useState("");
     const [sheet, setSheet] = useState(null); // null | { mode: "new" } | { mode: "edit", list }
@@ -26,13 +29,13 @@ export default function MyLists({ sheet: initialSheet }) {
     if (deleting) shownDelete.current = deleting;
 
     useEffect(() => {
-        if (!loggedIn) return;
+        if (!user) return;
         let alive = true;
         loadUserLists().then((l) => alive && setLists(l));
         return () => {
             alive = false;
         };
-    }, [loggedIn]);
+    }, [user]);
 
     // Deep links open the sheet once the lists are in.
     useEffect(() => {
@@ -94,14 +97,14 @@ export default function MyLists({ sheet: initialSheet }) {
         }
     };
 
-    if (!loggedIn) {
+    if (ready && !loggedIn) {
         return (
             <div className="page flex min-h-[60vh] flex-col items-start justify-center gap-6">
                 <h1 className="page-title">My lists</h1>
                 <p className="max-w-[60ch] text-lg text-grain">
                     Log in to see your lists. Lists keep films you want to remember, and you can share them.
                 </p>
-                <Link to="/login" className="btn btn-primary">
+                <Link to={loginPath(location)} className="btn btn-primary">
                     Log in
                 </Link>
             </div>

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import Dialog from "../../static/dialog";
 import { FloatField, Spinner } from "../../static/controls";
 import { customToast } from "../../static/toast";
 import {
     addListhandler,
     editListHandler,
-    fetchingUserUIDByEmail,
+    currentUid,
 } from "../../movie/databaseFetcher";
 import { invalidateUserLists } from "../../movie/listsStore";
 
@@ -19,6 +19,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
     const [confirmDiscard, setConfirmDiscard] = useState(false);
+    const shake = useAnimationControls();
 
     useEffect(() => {
         if (!open) return;
@@ -46,6 +47,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
         const listName = name.trim();
         if (!listName) {
             setError("Give the list a name");
+            shake.start({ x: [0, -4, 4, -4, 0], transition: { duration: 0.24 } });
             return;
         }
         setSaving(true);
@@ -56,7 +58,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
                 customToast("List saved", "success");
                 onSaved({ ...list, ...fields });
             } else {
-                const uid = await fetchingUserUIDByEmail();
+                const uid = await currentUid();
                 if (!uid) {
                     customToast("Log in to create lists", "error");
                     setSaving(false);
@@ -82,7 +84,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
 
     return (
         <Dialog open={open} onClose={requestClose} title={editing ? "Edit list" : "New list"}>
-            <form onSubmit={submit} noValidate>
+            <motion.form animate={shake} onSubmit={submit} noValidate>
                 <h2 className="text-[31px] font-extrabold">{editing ? "Edit list" : "New list"}</h2>
                 <div className="mt-6 space-y-3">
                     <FloatField
@@ -198,7 +200,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
                         )}
                     </AnimatePresence>
                 </div>
-            </form>
+            </motion.form>
         </Dialog>
     );
 }

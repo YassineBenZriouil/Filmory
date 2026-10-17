@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import ListPicker from "./listPicker";
+import ListPicker from "./lazyListPicker";
 import { fetchMovieGeneres } from "../movie/allFetcher";
 
 const SLIDE_MS = 7000;
@@ -129,7 +129,7 @@ export default function Hero({ movies }) {
                             variants={{ shown: { transition: { staggerChildren: 0.06 } } }}
                         >
                             {[
-                                <h2 key="t" className="text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[61px] lg:text-[76px]">
+                                <h2 key="t" className="break-words text-[39px] font-extrabold leading-[0.95] tracking-[-0.01em] sm:text-[61px] lg:text-[76px]">
                                     {movie.title}
                                 </h2>,
                                 <p key="m" className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-grain">
