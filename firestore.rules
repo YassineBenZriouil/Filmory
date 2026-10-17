@@ -15,6 +15,18 @@ service cloud.firestore {
       return '/Users/' + request.auth.uid;
     }
 
+    // Top-level fields this write changes.
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // The array `field` changes only by adding or removing the caller's own uid.
+    function onlyMyUidChanged(field) {
+      let before = resource.data.get(field, []).toSet();
+      let after = request.resource.data.get(field, []).toSet();
+      return after.difference(before).union(before.difference(after)).hasOnly([request.auth.uid]);
+    }
+
     // Private account details (includes the email). Only the owner.
     match /Users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
@@ -30,23 +42,78 @@ service cloud.firestore {
         && request.resource.data.userName.size() <= 40;
     }
 
-    match /Mylists/{listId} {
-      // Public lists are readable by anyone; private ones only by their owner.
-      allow read: if resource.data.isPublic == true
-        || (signedIn() && resource.data.user == ownerPath());
+    // What each person has watched, and who they follow. Private to them.
+    match /Watched/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    match /Follows/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
 
-      // New lists must belong to whoever creates them.
+    // Anyone signed in can report; nobody can read reports from the app.
+    // Review them in the Firebase console.
+    match /Reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['listId', 'reason', 'details', 'by', 'at'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.reason in ['offensive', 'spam', 'other']
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 500;
+    }
+
+    match /Mylists/{listId} {
+      function isOwner() {
+        return signedIn() && resource.data.user == ownerPath();
+      }
+      function isMember() {
+        return signedIn() && request.auth.uid in resource.data.members;
+      }
+
+      // Public lists: anyone. Private lists: the owner and the people they shared it with.
+      allow read: if resource.data.isPublic == true || isOwner() || isMember();
+
+      // New lists belong to whoever creates them and start unshared, unliked and unmoderated.
       allow create: if signedIn()
         && request.resource.data.user == ownerPath()
         && request.resource.data.listName is string
         && request.resource.data.listName.size() > 0
-        && request.resource.data.listName.size() <= 60;
+        && request.resource.data.listName.size() <= 60
+        && request.resource.data.get('members', []).size() == 0
+        && request.resource.data.get('likedBy', []).size() == 0
+        && !('hidden' in request.resource.data);
 
-      // Only the owner edits or deletes, and ownership can't be handed to someone else.
+      // Owner: anything except who owns it, its likes, and moderation. A list a moderator
+      // hid (hidden: true, set in the console) can't be made public again.
+      allow update: if isOwner()
+        && !changed().hasAny(['user', 'likedBy', 'hidden'])
+        && !(resource.data.get('hidden', false) == true && request.resource.data.get('isPublic', false) == true);
+
+      // People the list is shared with: films, order and per-film notes/interest only.
+      allow update: if isMember()
+        && changed().hasOnly(['works', 'order', 'meta']);
+
+      // A member leaving: removes only themselves.
+      allow update: if isMember()
+        && changed().hasOnly(['members'])
+        && onlyMyUidChanged('members')
+        && !(request.auth.uid in request.resource.data.members);
+
+      // Joining from an invite link: adds only yourself, and only with the current invite code.
       allow update: if signedIn()
-        && resource.data.user == ownerPath()
-        && request.resource.data.user == resource.data.user;
-      allow delete: if signedIn() && resource.data.user == ownerPath();
+        && changed().hasOnly(['members', 'joinedWith'])
+        && resource.data.get('inviteToken', '') != ''
+        && request.resource.data.joinedWith == resource.data.inviteToken
+        && onlyMyUidChanged('members')
+        && request.auth.uid in request.resource.data.members;
+
+      // Liking a public list someone else made: adds or removes only your own like.
+      allow update: if signedIn()
+        && !isOwner()
+        && resource.data.isPublic == true
+        && changed().hasOnly(['likedBy'])
+        && onlyMyUidChanged('likedBy');
+
+      allow delete: if isOwner();
     }
   }
 }

@@ -4,11 +4,12 @@ import ListPicker from "./lazyListPicker";
 import { stashPoster } from "../static/morph";
 import { prefetchTitle } from "../movie/oneFetcher";
 import { loadDetails } from "../lazyRoutes";
+import WatchedButton from "./watchedButton";
 
 // A film as a frame: poster, rating on the print, title and year beneath.
 // Renders its own link to the details page, plus a quick-add button
 // (hover on desktop, long-press on touch). `morph` makes the poster fly into the details page.
-export default function SmallCard({ data, type, morph = false, quickAdd = true, overlay }) {
+export default function SmallCard({ data, type, morph = false, quickAdd = true, overlay, watchedToggle = true }) {
     const [loaded, setLoaded] = useState(false);
     const [picker, setPicker] = useState(null); // null | "button" | "press"
     const [pickerMounted, setPickerMounted] = useState(false);
@@ -63,7 +64,16 @@ export default function SmallCard({ data, type, morph = false, quickAdd = true, 
     };
 
     return (
-        <div className="film-card relative">
+        <div
+            className="film-card relative"
+            // "L" on a focused card opens the list picker.
+            onKeyDown={(e) => {
+                if (quickAdd && (e.key === "l" || e.key === "L") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    e.preventDefault();
+                    openPicker("button");
+                }
+            }}
+        >
             <Link
                 to={`/movieDetails/${data.id}/${type}`}
                 state={morph ? { morph: true } : undefined}
@@ -132,6 +142,7 @@ export default function SmallCard({ data, type, morph = false, quickAdd = true, 
                     <i className="fa-solid fa-plus text-sm" aria-hidden="true"></i>
                 </button>
             )}
+            {watchedToggle && <WatchedButton variant="overlay" type={type} id={data.id} title={title} />}
             {overlay}
 
             {pickerMounted && (

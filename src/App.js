@@ -6,6 +6,7 @@ import {
     Navigate,
     useLocation,
     useNavigationType,
+    useParams,
 } from "react-router-dom";
 import {
     AnimatePresence,
@@ -44,6 +45,9 @@ const Profile = lazy(routes.loadProfile);
 const MyLists = lazy(routes.loadMyLists);
 const ListPage = lazy(routes.loadListPage);
 const PublicLists = lazy(routes.loadPublicLists);
+const Author = lazy(routes.loadAuthor);
+const JoinList = lazy(routes.loadJoin);
+const Embed = lazy(routes.loadEmbed);
 
 const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
 
@@ -64,6 +68,8 @@ const TITLES = {
     public: "Public lists",
     publiclistinside: "Public list",
     person: "Person",
+    u: "Lists",
+    join: "Join a shared list",
 };
 
 const EASE_OUT = [0.2, 0.8, 0.2, 1];
@@ -107,7 +113,7 @@ function RouteAnnouncer({ pathname }) {
 function usePageTitle(pathname) {
     useEffect(() => {
         const segment = pathname.split("/")[1].toLowerCase();
-        if (segment === "moviedetails" || segment === "person") return;
+        if (segment === "moviedetails" || segment === "person" || segment === "u") return;
         const label = segment in TITLES ? TITLES[segment] : "Page not found";
         document.title = label ? `${label} – ${brand}` : brand;
     }, [pathname]);
@@ -222,6 +228,10 @@ function AnimatedRoutes() {
                             element={<ListPage publicRoute />}
                         />
                         <Route path="/person/:id" element={<Person />} />
+                        <Route path="/u/:uid" element={<Author />} />
+                        <Route path="/join/:id/:token" element={<JoinList />} />
+                        {/* Share links; on Vercel, api/l/[id].js answers first with a link preview. */}
+                        <Route path="/l/:id" element={<ShareRedirect />} />
                         <Route path="*" element={<NotFound />} />
                     </Routes>
                     </Suspense>
@@ -232,6 +242,11 @@ function AnimatedRoutes() {
     );
 }
 
+function ShareRedirect() {
+    const { id } = useParams();
+    return <Navigate to={`/publicListInside/${id}`} replace />;
+}
+
 function App() {
     const { theme, resolved, setTheme } = useTheme();
     return (
@@ -240,6 +255,10 @@ function App() {
         <ThemeContext.Provider value={{ theme, setTheme }}>
         <MotionConfig reducedMotion="user">
             <Router>
+                <Routes>
+                {/* Embeds render on their own: no header, footer or toasts. */}
+                <Route path="/embed/:id" element={<Suspense fallback={null}><Embed /></Suspense>} />
+                <Route path="*" element={<>
                 <div className="flex min-h-screen flex-col">
                     <ToastContainer
                         position="bottom-right"
@@ -265,6 +284,8 @@ function App() {
                     <Footer theme={theme} setTheme={setTheme} />
                 </div>
                 <Beam />
+                </>} />
+                </Routes>
             </Router>
         </MotionConfig>
         </ThemeContext.Provider>

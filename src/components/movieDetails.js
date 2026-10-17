@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { loginPath, useAuth } from "../auth/authContext";
 import { CreditLine, Keywords, Seasons, WhereToWatch } from "./detailsExtras";
 import { addRecentlyViewed } from "../static/prefs";
+import WatchedButton from "./watchedButton";
 import { fetchOneMovie, fetchOneSerie } from "./../movie/oneFetcher";
 import { fetchRecommendations } from "./../movie/allFetcher";
 import Loading from "../static/loading";
@@ -152,6 +153,20 @@ export default function MovieDetails() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [title]);
 
+    // "L" opens the list picker from anywhere on the page (not while typing).
+    useEffect(() => {
+        if (!film || !loggedIn) return;
+        const onKey = (e) => {
+            if (e.key !== "l" && e.key !== "L") return;
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.closest(".film-card")) return;
+            e.preventDefault();
+            setPicker(true);
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+    }, [film, loggedIn]);
+
     // Came back from logging in after pressing "Log in to save": finish adding.
     useEffect(() => {
         if (!film || !loggedIn || location.state?.intent !== "add") return;
@@ -297,6 +312,7 @@ export default function MovieDetails() {
                                 Log in to save
                             </Link>
                         )}
+                        <WatchedButton type={type === "tv" ? "tv" : "movie"} id={film.id} title={title} />
                         {trailer && (
                             <button type="button" className="btn btn-secondary" onClick={() => setTrailerOpen(true)}>
                                 <i className="fa-solid fa-play text-sm" aria-hidden="true"></i>

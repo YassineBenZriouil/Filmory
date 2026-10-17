@@ -10,3 +10,6 @@ export const loadProfile = () => import("./auth/profile");
 export const loadMyLists = () => import("./components/lists/myLists");
 export const loadListPage = () => import("./components/lists/listPage");
 export const loadPublicLists = () => import("./components/lists/Public/publiclists");
+export const loadAuthor = () => import("./components/author");
+export const loadJoin = () => import("./components/lists/joinList");
+export const loadEmbed = () => import("./components/lists/embed");

@@ -140,6 +140,8 @@ export default function Search() {
     useEffect(() => {
         const onKey = (e) => {
             const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+            // Browser autofill fires keydown events with no key at all.
+            if (!e.key) return;
             if ((e.key === "/" && !typing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) {
                 e.preventDefault();
                 focusSearch();

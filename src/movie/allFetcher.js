@@ -131,6 +131,12 @@ export const fetchRecommendations = async (type, id) => {
     }
 };
 
+// Movie search narrowed by year (for imports, where the year is known).
+export const searchMovie = async (query, year) => {
+    const data = await tmdb("/search/movie", { query, year, include_adult: false });
+    return data.results || [];
+};
+
 export const fetchPerson = async (id) => {
     try {
         return await tmdb(`/person/${id}`, { append_to_response: "combined_credits" });

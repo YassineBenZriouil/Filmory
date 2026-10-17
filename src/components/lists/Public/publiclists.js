@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchAllPublicLists, fetchProfile, filmCount } from "../../../movie/databaseFetcher";
+import { fetchAllPublicLists, fetchProfile } from "../../../movie/databaseFetcher";
+import { filmCount } from "../../../movie/listModel";
 import ListTile, { TileSkeleton } from "../listTile";
 
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5";
@@ -15,7 +16,8 @@ export default function PublicLists() {
         let alive = true;
         (async () => {
             try {
-                const publicLists = await fetchAllPublicLists();
+                // Moderated or deleted lists never show here.
+                const publicLists = (await fetchAllPublicLists()).filter((l) => !l.deletedAt && !l.hidden);
                 if (!alive) return;
                 setLists(publicLists);
                 // One lookup per author, all at once, instead of one per card.
@@ -38,8 +40,13 @@ export default function PublicLists() {
         const matched = (lists || []).filter(
             (l) => !q || l.listName?.toLowerCase().includes(q) || l.description?.toLowerCase().includes(q)
         );
+        const likes = (l) => (l.likedBy || []).length;
         return matched.sort((a, b) =>
-            sort === "films" ? filmCount(b) - filmCount(a) : (b.createdAt || 0) - (a.createdAt || 0)
+            sort === "films"
+                ? filmCount(b) - filmCount(a)
+                : sort === "liked"
+                ? likes(b) - likes(a) || (b.createdAt || 0) - (a.createdAt || 0)
+                : (b.createdAt || 0) - (a.createdAt || 0)
         );
     }, [lists, query, sort]);
 
@@ -67,6 +74,7 @@ export default function PublicLists() {
                     Sort
                     <select value={sort} onChange={(e) => setSort(e.target.value)} className="field min-h-[40px] w-auto cursor-pointer text-base">
                         <option value="newest">Newest</option>
+                        <option value="liked">Most liked</option>
                         <option value="films">Most films</option>
                     </select>
                 </label>

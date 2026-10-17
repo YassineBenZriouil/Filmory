@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import Dialog from "../../static/dialog";
-import { FloatField, Spinner } from "../../static/controls";
+import { FloatField, Spinner, Switch } from "../../static/controls";
+import { blockedWord } from "../../movie/listModel";
 import { customToast } from "../../static/toast";
 import {
     addListhandler,
@@ -16,6 +17,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [isPublic, setIsPublic] = useState(false);
+    const [anonymous, setAnonymous] = useState(false);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
     const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -26,6 +28,7 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
         setName(list?.listName || "");
         setDescription(list?.description || "");
         setIsPublic(!!list?.isPublic);
+        setAnonymous(!!list?.anonymous);
         setError("");
         setSaving(false);
         setConfirmDiscard(false);
@@ -34,7 +37,8 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
     const dirty =
         name !== (list?.listName || "") ||
         description !== (list?.description || "") ||
-        isPublic !== !!list?.isPublic;
+        isPublic !== !!list?.isPublic ||
+        anonymous !== !!list?.anonymous;
 
     const requestClose = () => {
         if (saving) return;
@@ -50,9 +54,16 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
             shake.start({ x: [0, -4, 4, -4, 0], transition: { duration: 0.24 } });
             return;
         }
+        // A quick check before anything goes public; reports catch the rest.
+        const bad = isPublic && blockedWord(listName, description);
+        if (bad) {
+            setError(`Change “${bad}” in the name or description to make this list public`);
+            shake.start({ x: [0, -4, 4, -4, 0], transition: { duration: 0.24 } });
+            return;
+        }
         setSaving(true);
         try {
-            const fields = { listName, description: description.trim(), isPublic };
+            const fields = { listName, description: description.trim(), isPublic, anonymous };
             if (editing) {
                 await editListHandler(list.id, fields);
                 customToast("List saved", "success");
@@ -138,6 +149,14 @@ export default function ListSheet({ open, list, onClose, onSaved }) {
                             </label>
                         ))}
                     </div>
+                    {isPublic && (
+                        <div className="mt-3 flex items-center gap-3">
+                            <Switch id="show-name" checked={!anonymous} onChange={(v) => setAnonymous(!v)} label="Show my name on this list" />
+                            <label htmlFor="show-name" className="cursor-pointer">
+                                Show my name on this list
+                            </label>
+                        </div>
+                    )}
                 </fieldset>
 
                 <div className="mt-8 min-h-[44px]">

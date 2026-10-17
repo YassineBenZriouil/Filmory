@@ -11,7 +11,10 @@ import {
     updateDoc,
     arrayUnion,
     arrayRemove,
+    deleteField,
+    writeBatch,
 } from "firebase/firestore";
+import { keyOf, randomToken, worksOf } from "./listModel";
 import { db } from "../auth/firestore";
 import { auth } from "../auth/firebase";
 
@@ -36,17 +39,7 @@ export const addListhandler = async (list) => {
     return ref.id;
 };
 
-// Older lists were created with works: [] instead of { movie: [], tv: [] }.
-export const worksOf = (list) => {
-    const works = list?.works;
-    if (!works || Array.isArray(works)) return { movie: [], tv: [] };
-    return { movie: works.movie || [], tv: works.tv || [] };
-};
-
-export const filmCount = (list) => {
-    const { movie, tv } = worksOf(list);
-    return movie.length + tv.length;
-};
+export { worksOf, filmCount } from "./listModel";
 
 export const editListHandler = async (listId, updatedList) => {
     const listRef = doc(db, "Mylists", listId);
@@ -94,77 +87,196 @@ export const deleteListHandler = async (listId) => {
     await deleteDoc(listRef);
 };
 
-export const addMovieToList = async (listId, itemId, type) => {
-    try {
-        const listRef = doc(db, "Mylists", listId);
-        const updateData = {};
-        const itemIdAsNumber = parseInt(itemId, 10);
-        // A field path like works.movie fails when works is still an array; convert it first.
-        const snap = await getDoc(listRef);
-        if (Array.isArray(snap.data()?.works)) {
-            await updateDoc(listRef, { works: { movie: [], tv: [] } });
-        }
-        if (type === "movie") {
-            updateData[`works.movie`] = arrayUnion(itemIdAsNumber);
-        } else if (type === "tv") {
-            updateData[`works.tv`] = arrayUnion(itemIdAsNumber);
-        } else {
-            throw new Error("Invalid type. Must be 'movie' or 'tv'.");
-        }
-        updateData[`works.${type}`] = arrayUnion(itemIdAsNumber);
-        await updateDoc(listRef, updateData);
-    } catch (error) {
-        console.error("Error adding item to list:", error);
-        throw new Error("Failed to add item to the list.");
+// Add films ({ type, id }) to a list in one write. Records who added each and when.
+export const addManyToList = async (listId, films) => {
+    const listRef = doc(db, "Mylists", listId);
+    const snap = await getDoc(listRef);
+    if (!snap.exists()) throw new Error("List not found");
+    const data = snap.data();
+    // A field path like works.movie fails when works is still an array; convert it first.
+    if (Array.isArray(data.works) || !data.works) {
+        await updateDoc(listRef, { works: { movie: [], tv: [] } });
     }
+    const uid = auth.currentUser?.uid || null;
+    const existing = new Set(Object.keys(data.meta || {}));
+    const update = {};
+    const byType = { movie: [], tv: [] };
+    const keys = [];
+    for (const { type, id } of films) {
+        if (type !== "movie" && type !== "tv") continue;
+        const n = Number(id);
+        byType[type].push(n);
+        const key = keyOf(type, n);
+        keys.push(key);
+        if (!existing.has(key)) {
+            update[`meta.${key}.addedAt`] = Date.now();
+            update[`meta.${key}.addedBy`] = uid;
+        }
+    }
+    if (byType.movie.length) update["works.movie"] = arrayUnion(...byType.movie);
+    if (byType.tv.length) update["works.tv"] = arrayUnion(...byType.tv);
+    if (keys.length) update.order = arrayUnion(...keys);
+    if (Object.keys(update).length) await updateDoc(listRef, update);
+};
+
+export const removeManyFromList = async (listId, films) => {
+    const update = {};
+    const byType = { movie: [], tv: [] };
+    const keys = [];
+    for (const { type, id } of films) {
+        const n = Number(id);
+        byType[type]?.push(n);
+        const key = keyOf(type, n);
+        keys.push(key);
+        update[`meta.${key}`] = deleteField();
+    }
+    if (byType.movie.length) update["works.movie"] = arrayRemove(...byType.movie);
+    if (byType.tv.length) update["works.tv"] = arrayRemove(...byType.tv);
+    if (keys.length) update.order = arrayRemove(...keys);
+    await updateDoc(doc(db, "Mylists", listId), update);
+};
+
+export const addMovieToList = (listId, itemId, type) => addManyToList(listId, [{ type, id: itemId }]);
+export const removeItemFromList = (listId, itemId, type) => removeManyFromList(listId, [{ type, id: itemId }]);
+
+// Rating, note or interest for one film in one list.
+export const setItemMeta = (listId, key, patch) =>
+    updateDoc(
+        doc(db, "Mylists", listId),
+        Object.fromEntries(Object.entries(patch).map(([field, value]) => [`meta.${key}.${field}`, value]))
+    );
+
+export const setInterest = (listId, key, interested) =>
+    updateDoc(doc(db, "Mylists", listId), {
+        [`meta.${key}.interested`]: interested ? arrayUnion(auth.currentUser.uid) : arrayRemove(auth.currentUser.uid),
+    });
+
+export const setListOrder = (listId, order) => updateDoc(doc(db, "Mylists", listId), { order });
+export const setListCover = (listId, cover) => updateDoc(doc(db, "Mylists", listId), { cover });
+
+export const setPublic = (listId, isPublic) => updateDoc(doc(db, "Mylists", listId), { isPublic });
+
+// Soft delete: hidden from everyone and kept for 30 days under "Recently deleted".
+export const softDeleteList = (list) =>
+    updateDoc(doc(db, "Mylists", list.id), { deletedAt: Date.now(), wasPublic: !!list.isPublic, isPublic: false });
+
+export const restoreList = (list) =>
+    updateDoc(doc(db, "Mylists", list.id), { deletedAt: deleteField(), isPublic: !!list.wasPublic, wasPublic: deleteField() });
+
+export const copyList = async (list, uid) => {
+    const copy = {
+        listName: `${list.listName} (copy)`.slice(0, 60),
+        description: list.description || "",
+        isPublic: false,
+        user: `/Users/${uid}`,
+        works: worksOf(list),
+        order: list.order || [],
+        createdAt: Date.now(),
+        copiedFrom: list.id,
+    };
+    return { id: await addListhandler(copy), ...copy };
+};
+
+// ---- Likes ----
+export const setLiked = (listId, liked) =>
+    updateDoc(doc(db, "Mylists", listId), {
+        likedBy: liked ? arrayUnion(auth.currentUser.uid) : arrayRemove(auth.currentUser.uid),
+    });
+
+// ---- Shared lists ----
+export const createInvite = async (listId) => {
+    const inviteToken = randomToken();
+    await updateDoc(doc(db, "Mylists", listId), { inviteToken });
+    return inviteToken;
+};
+export const stopInvites = (listId) => updateDoc(doc(db, "Mylists", listId), { inviteToken: deleteField() });
+
+// The security rules only accept this if the token matches the list's current invite.
+export const joinList = (listId, token) =>
+    updateDoc(doc(db, "Mylists", listId), { members: arrayUnion(auth.currentUser.uid), joinedWith: token });
+
+export const leaveList = (listId) => updateDoc(doc(db, "Mylists", listId), { members: arrayRemove(auth.currentUser.uid) });
+export const removeMember = (listId, uid) => updateDoc(doc(db, "Mylists", listId), { members: arrayRemove(uid) });
+
+export const fetchSharedWithMe = async () => {
+    const uid = await currentUid();
+    if (!uid) return [];
+    const snap = await getDocs(query(collection(db, "Mylists"), where("members", "array-contains", uid)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// ---- Authors and following ----
+export const fetchPublicListsBy = async (uids) => {
+    if (!uids.length) return [];
+    const chunks = [];
+    for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30)); // Firestore "in" limit
+    const snaps = await Promise.all(
+        chunks.map((chunk) =>
+            getDocs(
+                query(
+                    collection(db, "Mylists"),
+                    where("isPublic", "==", true),
+                    where("user", "in", chunk.map((uid) => `/Users/${uid}`))
+                )
+            )
+        )
+    );
+    return snaps.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+};
+
+export const fetchFollowing = async () => {
+    const uid = await currentUid();
+    if (!uid) return [];
+    const snap = await getDoc(doc(db, "Follows", uid));
+    return snap.data()?.following || [];
+};
+export const setFollowing = async (authorUid, follow) => {
+    const uid = await currentUid();
+    await setDoc(
+        doc(db, "Follows", uid),
+        { following: follow ? arrayUnion(authorUid) : arrayRemove(authorUid) },
+        { merge: true }
+    );
+};
+
+// ---- Watched (per person, across all lists) ----
+export const fetchWatched = async () => {
+    const uid = await currentUid();
+    if (!uid) return {};
+    const snap = await getDoc(doc(db, "Watched", uid));
+    return snap.data()?.films || {};
+};
+export const setWatched = async (keys, watched) => {
+    const uid = await currentUid();
+    const update = Object.fromEntries(keys.map((key) => [key, watched ? Date.now() : deleteField()]));
+    await setDoc(doc(db, "Watched", uid), { films: update }, { merge: true });
+};
+
+// ---- Safety ----
+export const reportList = (listId, reason, details) =>
+    addDoc(collection(db, "Reports"), {
+        listId,
+        reason,
+        details: details.slice(0, 500),
+        by: auth.currentUser.uid,
+        at: Date.now(),
+    });
+
+// Lists deleted more than 30 days ago are removed for good.
+export const purgeDeleted = async (lists, days) => {
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const old = lists.filter((l) => l.deletedAt && l.deletedAt < cutoff);
+    if (!old.length) return [];
+    const batch = writeBatch(db);
+    old.forEach((l) => batch.delete(doc(db, "Mylists", l.id)));
+    await batch.commit();
+    return old.map((l) => l.id);
 };
 
 export const fetchListById = async (listId) => {
     const listRef = doc(db, "Mylists", listId);
     const listSnapshot = await getDoc(listRef);
     return listSnapshot.exists() ? listSnapshot.data() : null;
-};
-
-export const removeItemFromList = async (listId, itemId, type) => {
-    const listRef = doc(db, "Mylists", listId);
-    try {
-        const listSnap = await getDoc(listRef);
-        if (!listSnap.exists()) {
-            throw new Error("List not found");
-        }
-        const works = listSnap.data().works || {};
-        console.log("Works Data:", works);
-        if (type === "movie") {
-            const movieArray = works.movie || [];
-            console.log("Movie Array:", movieArray);
-            if (movieArray.includes(itemId)) {
-                await updateDoc(listRef, {
-                    "works.movie": arrayRemove(itemId),
-                });
-                console.log("Movie successfully removed!");
-            } else {
-                throw new Error("Movie not found in the list" + itemId);
-            }
-        } else if (type === "tv") {
-            const tvArray = works.tv || [];
-            console.log("TV Array:", tvArray);
-            if (tvArray.includes(itemId)) {
-                await updateDoc(listRef, { "works.tv": arrayRemove(itemId) });
-                console.log("TV show successfully removed!");
-            } else {
-                throw new Error("TV show not found in the list " + itemId);
-            }
-        } else {
-            throw new Error(
-                `${
-                    type.charAt(0).toUpperCase() + type.slice(1)
-                } not found in the list`
-            );
-        }
-    } catch (error) {
-        console.error(`Error removing ${type}:`, error);
-        throw error;
-    }
 };
 
 export const handlepublication = async (listId) => {

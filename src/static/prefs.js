@@ -66,3 +66,7 @@ export const regionName = (code) => {
         return code;
     }
 };
+
+// ---- When each list was last added to (for the list picker's order) ----
+export const getListUsage = () => read("listUsage", {});
+export const markListUsed = (listId) => write("listUsage", { ...getListUsage(), [listId]: Date.now() });

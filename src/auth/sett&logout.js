@@ -7,7 +7,7 @@ import { initialsOf } from "../static/avatar";
 import Count from "../static/count";
 import ThemeControl from "../style/themeBtn";
 import { ThemeContext } from "../style/themeContext";
-import { filmCount } from "../movie/databaseFetcher";
+import { filmCount } from "../movie/listModel";
 import { useAuth } from "./authContext";
 import { invalidateUserLists, loadUserLists } from "../movie/listsStore";
 import ListTile, { TileSkeleton } from "../components/lists/listTile";
@@ -38,7 +38,7 @@ export default function Account() {
 
     useEffect(() => {
         let alive = true;
-        loadUserLists().then((l) => alive && setLists(l));
+        loadUserLists().then((l) => alive && setLists(l.filter((x) => !x.deletedAt)));
         return () => {
             alive = false;
         };
@@ -112,7 +112,7 @@ export default function Account() {
                 <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
                     {lists === null
                         ? [0, 1].map((i) => <TileSkeleton key={i} />)
-                        : recent.map((list) => <ListTile key={list.id} list={list} to={`/listInside/${list.id}`} />)}
+                        : recent.map((list) => <ListTile key={list.id} list={list} to={`/listInside/${list.id}`} showProgress />)}
                 </div>
                 {lists?.length === 0 && (
                     <div className="space-y-4">
