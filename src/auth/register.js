@@ -3,7 +3,6 @@ import { auth, db } from "./firebase";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { setDoc, doc } from "firebase/firestore";
-import Animations from "../static/animations";
 import { customToast } from "./../static/toast";
 
 export default function Register() {
@@ -29,39 +28,47 @@ export default function Register() {
             });
             console.log("User data stored in Firestore");
 
-            customToast("User registered successfully", "success");
+            customToast("Account created. Log in to continue.", "success");
             navigate("/login");
         } catch (error) {
             console.error("User registration failed:", error.message);
             if (error.code === "auth/email-already-in-use") {
                 customToast(
-                    "Email already in use, please use another email",
+                    <span>
+                        That email already has an account.{" "}
+                        <button
+                            type="button"
+                            className="font-bold underline underline-offset-4"
+                            onClick={() => navigate("/login")}
+                        >
+                            Log in
+                        </button>
+                    </span>,
                     "warning"
                 );
             } else {
-                customToast("User registration failed", "error");
+                customToast("Couldn’t create the account. Try again.", "error");
             }
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-white">
-            <div className="flex items-center justify-center w-full max-w-md">
-                <Animations>
-                    <div className="bg-gray-200 text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-lg p-6 w-full space-y-6">
-                        <h1 className="text-3xl font-bold text-center">
+        <div className="page flex min-h-[70vh] items-center justify-center">
+            <div className="w-full max-w-md">
+                    <div className="panel p-6 md:p-8 w-full space-y-6">
+                        <h1 className="page-title">
                             Register
                         </h1>
                         <form className="space-y-4" onSubmit={handleSubmit}>
                             <div>
                                 <label
-                                    className="block text-sm font-medium mb-1"
+                                    className="label"
                                     htmlFor="userName"
                                 >
                                     User Name
                                 </label>
                                 <input
-                                    className="w-full bg-gray-100 text-black dark:bg-gray-800 dark:text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="field"
                                     type="text"
                                     id="userName"
                                     name="userName"
@@ -74,13 +81,13 @@ export default function Register() {
                             </div>
                             <div>
                                 <label
-                                    className="block text-sm font-medium mb-1"
+                                    className="label"
                                     htmlFor="email"
                                 >
                                     Email
                                 </label>
                                 <input
-                                    className="w-full bg-gray-100 text-black dark:bg-gray-800 dark:text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="field"
                                     type="email"
                                     id="email"
                                     name="email"
@@ -91,13 +98,13 @@ export default function Register() {
                             </div>
                             <div>
                                 <label
-                                    className="block text-sm font-medium mb-1"
+                                    className="label"
                                     htmlFor="password"
                                 >
                                     Password
                                 </label>
                                 <input
-                                    className="w-full bg-gray-100 text-black dark:bg-gray-800 dark:text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="field"
                                     type="password"
                                     id="password"
                                     name="password"
@@ -109,23 +116,22 @@ export default function Register() {
                                 />
                             </div>
                             <button
-                                className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                                className="btn btn-primary w-full"
                                 type="submit"
                             >
                                 Register
                             </button>
                         </form>
-                        <p className="text-sm text-center">
+                        <p className="text-sm text-grain">
                             Already have an account?{" "}
                             <Link
-                                className="text-blue-500 hover:underline"
+                                className="text-screen underline decoration-reel underline-offset-4 hover:decoration-beam"
                                 to="/login"
                             >
                                 Login
                             </Link>
                         </p>
                     </div>
-                </Animations>
             </div>
         </div>
     );

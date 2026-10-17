@@ -1,49 +1,60 @@
-import React from "react";
-import Animations from "../static/animations";
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
+// A film as a frame: poster, rating on the print, title and year beneath.
+// Renders its own link to the details page.
 export default function SmallCard({ data, type }) {
-    const truncateText = (text, maxLength) => {
-        if (!text) return ""; // Handle case where text is undefined
-        return text.length > maxLength
-            ? text.slice(0, maxLength) + "..."
-            : text;
-    };
+    const [loaded, setLoaded] = useState(false);
+    if (!data) return null;
 
-    const typeCheck = () => {
-        return type === "tv"
-            ? ["name", "first_air_date"]
-            : ["title", "release_date"];
-    };
-
-    if (!data) return console.log("no data passed to smallCard");
-
-    const [titleField, dateField] = typeCheck(); // Destructure the array returned by typeCheck
+    const title = type === "tv" ? data.name : data.title;
+    const date = type === "tv" ? data.first_air_date : data.release_date;
+    const year = date ? date.slice(0, 4) : null;
+    const rating = data.vote_average ? data.vote_average.toFixed(1) : null;
+    const label = [title, year, rating && `rated ${rating}`]
+        .filter(Boolean)
+        .join(", ");
 
     return (
-        <Animations>
-            <div className="bg-gray-200 text-black dark:bg-gray-900  dark:text-white rounded-lg shadow-lg  w-50 h-72 p-0 hover:scale-105 cursor-pointer">
-                <img
-                    src={`https://image.tmdb.org/t/p/w500${data.poster_path}`}
-                    alt={data[titleField]}
-                    className="w-50 max-h-52 object-contain rounded-md"
-                />
-                <div className="mt-4 p-2">
-                    <div className="flex justify-between">
-                        <h2 className="text-sm font-semibold mb-2">
-                            {truncateText(data[titleField], 15)}
-                        </h2>
+        <Link
+            to={`/movieDetails/${data.id}/${type}`}
+            aria-label={label}
+            className="film-card group block"
+        >
+            <div className="film-frame grain relative aspect-[2/3] overflow-hidden rounded-[3px] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-offset-[3px] group-focus-visible:outline-[rgb(var(--focus))]">
+                {data.poster_path ? (
+                    <img
+                        src={`https://image.tmdb.org/t/p/w342${data.poster_path}`}
+                        alt=""
+                        width="342"
+                        height="513"
+                        loading="lazy"
+                        decoding="async"
+                        onLoad={() => setLoaded(true)}
+                        className={`fade-img h-full w-full object-cover ${
+                            loaded ? "is-loaded" : ""
+                        }`}
+                    />
+                ) : (
+                    <div className="grid h-full place-items-center p-4 text-center font-display text-2xl font-extrabold leading-none text-grain">
+                        {title}
                     </div>
-
-                    <div className="flex justify-between text-xs">
-                        <p className="font-bold">
-                            Rating: {data.vote_average.toFixed(1)}
-                        </p>
-                        <p className="text-xs text-gray-400 mb-3">
-                            {new Date(data[dateField]).getFullYear()}
-                        </p>
-                    </div>
-                </div>
+                )}
+                {rating && (
+                    <span
+                        className={`absolute bottom-1.5 right-1.5 rounded-[3px] bg-booth/85 px-1.5 py-0.5 font-display text-base font-extrabold leading-none tabular-nums ${
+                            rating >= 7 ? "text-beam" : "text-screen"
+                        }`}
+                        aria-hidden="true"
+                    >
+                        {rating}
+                    </span>
+                )}
             </div>
-        </Animations>
+            <p className="mt-2 line-clamp-2 font-bold leading-snug text-screen">
+                {title}
+            </p>
+            {year && <p className="text-[13px] text-grain">{year}</p>}
+        </Link>
     );
 }

@@ -34,25 +34,27 @@ export default function PublicListCard({ list, handleDeleteList }) {
 
     return (
         <div key={list.id} className="block">
-            <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-all duration-200">
+            <div className="border border-reel p-4 rounded-[14px] transition-colors duration-quick hover:border-grain">
                 {userData ? (
-                    <h2>{userData.userName}</h2> // Display username or any field from userData
+                    <p className="text-[13px] text-grain">{userData.userName}</p>
                 ) : (
-                    <p>Loading user...</p>
+                    <div className="skeleton h-3 w-[60px] rounded" />
                 )}
-                <h3 className="text-lg font-semibold text-black dark:text-white mb-2">
-                    {list.listName.toUpperCase() || "Untitled List"}
+                <h3 className="font-display text-[25px] font-semibold mb-2">
+                    {list.listName || "Untitled List"}
                 </h3>
 
-                <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                <p className="text-sm text-grain mb-2">
                     {list.description || "No description available"}
                 </p>
 
-                <div className="flex space-x-4">
-                    <Link to={`/publicListInside/${list.id}`}>
-                        <button className="bg-blue-600 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200">
-                            <i className="fa-solid fa-eye"></i>
-                        </button>
+                <div className="flex gap-2">
+                    <Link
+                        to={`/publicListInside/${list.id}`}
+                        className="btn btn-secondary btn-icon"
+                        aria-label={`Open ${list.listName}`}
+                    >
+                        <i className="fa-solid fa-eye" aria-hidden="true"></i>
                     </Link>
                 </div>
             </div>

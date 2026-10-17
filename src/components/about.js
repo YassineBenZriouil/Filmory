@@ -1,19 +1,17 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import Animations from "../static/animations";
 
 export default function About() {
     const companyName = process.env.REACT_APP_COMPANY_NAME || "Your Company";
 
     return (
-        <div className="bg-white text-black dark:bg-black dark:text-white">
-            <Animations>
+        <div className="">
                 <div className="min-h-screen flex flex-col items-center justify-center p-8">
                     <h1 className="text-4xl font-bold mb-6">
                         🎥 Welcome to {companyName} Official Site 🌟
                     </h1>
                     <Link className="m-4" to="/">
-                        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                        <button className="btn btn-primary">
                             🏠 Home
                         </button>
                     </Link>
@@ -97,7 +95,6 @@ export default function About() {
                     </h4>
                     <h4>yassinebenzriouil7@gmail.com</h4>
                 </div>
-            </Animations>
         </div>
     );
 }

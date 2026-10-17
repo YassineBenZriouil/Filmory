@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import Animations from "../../../static/animations";
 import { fetchAllPublicLists } from "../../../movie/databaseFetcher"; // Import the correct fetch function
 import { searchListByQuery } from "../../../movie/databaseFetcher";
 import PublicListCard from "./publicListCard";
@@ -28,11 +27,10 @@ export default function PublicLists() {
     };
 
     return (
-        <div className="min-h-screen  flex items-center justify-center bg-white dark:bg-black text-white">
-            <div className="flex items-center  justify-center w-full max-w-4xl m-3">
-                <Animations>
-                    <div className="bg-gray-200 text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-lg p-6 w-full space-y-6">
-                        <h1 className="text-3xl font-bold text-center">
+        <div className="page flex min-h-[70vh] items-center justify-center">
+            <div className="w-full max-w-4xl">
+                    <div className="panel p-6 md:p-8 w-full space-y-6">
+                        <h1 className="page-title">
                             Public Lists
                         </h1>
                         <p>Take a Look At other people's lists </p>
@@ -45,7 +43,7 @@ export default function PublicLists() {
                                 }}
                                 placeholder="Search Lists With key Words"
                                 type="text"
-                                className="mt-4 w-full p-2 bg-gray-300 text-black rounded-l-md dark:bg-gray-700 dark:text-white focus:outline-none"
+                                className="field mt-4"
                             />
                         </div>
                         <div className="space-y-4">
@@ -54,13 +52,12 @@ export default function PublicLists() {
                                     <PublicListCard key={list.id} list={list} />
                                 ))
                             ) : (
-                                <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+                                <p className="text-grain">
                                     No lists found...
                                 </p>
                             )}
                         </div>
                     </div>
-                </Animations>
             </div>
         </div>
     );

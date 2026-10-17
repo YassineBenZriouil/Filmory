@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { fetchListById, likeaList } from "../../../movie/databaseFetcher";
 import SmallCard from "../../smallCard";
+import CardGrid from "../../cardGrid";
+import { SkeletonGrid } from "../../../static/loading";
 import { fetchOneMovie, fetchOneSerie } from "../../../movie/oneFetcher";
 import { db } from "../../../auth/firebase";
 import { getDoc, doc } from "firebase/firestore";
@@ -84,52 +86,52 @@ export default function PublicListInside() {
     };
 
     return (
-        <div className="bg-white min-h-screen text-black dark:bg-black dark:text-white pb-5">
-            {error && <p className="text-red-500 text-center">{error}</p>}
+        <div className="min-h-screen pb-5">
+            {error && <p className="page text-velvet">{error}</p>}
             {listData ? (
-                <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-                    <div className="text-center">
+                <div className="page">
+                    <div>
                         {userData ? (
-                            <h1>{userData.userName}</h1> // Display user name once userData is fetched
+                            <p className="mb-3 text-grain">By {userData.userName}</p>
                         ) : (
-                            <p>Loading user...</p>
+                            <div className="skeleton mb-3 h-4 w-[120px] rounded" />
                         )}
-                        <h1 className="text-3xl font-bold text-black dark:text-white">
-                            {listData.listName.toUpperCase()}
+                        <h1 className="page-title">
+                            {listData.listName}
                         </h1>
-                        <p className="text-lg text-gray-700 dark:text-gray-300 mt-2">
+                        <p className="mt-3 max-w-[68ch] text-grain">
                             {listData.description}
                         </p>
                     </div>
 
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="mt-10">
+                    <CardGrid>
                         {worksData.length > 0 ? (
                             worksData.map((work) => (
                                 <div
                                     key={work.id}
-                                    className="flex flex-col items-center"
+                                    className="flex flex-col"
                                 >
-                                    <Link
-                                        to={`/movieDetails/${work.id}/${work.type}`}
-                                    >
-                                        <SmallCard
+                                    <SmallCard
                                             data={work}
                                             type={work.type}
                                         />
-                                    </Link>
                                 </div>
                             ))
                         ) : (
-                            <p className="text-center text-gray-500 dark:text-gray-400">
-                                No works found...
+                            <p className="col-span-full text-grain">
+                                Nothing in this list yet.
                             </p>
                         )}
+                    </CardGrid>
                     </div>
                 </div>
             ) : (
-                <p className="text-center text-gray-500 dark:text-gray-400">
-                    Loading list...
-                </p>
+                !error && (
+                    <div className="page">
+                        <SkeletonGrid count={10} />
+                    </div>
+                )
             )}
         </div>
     );

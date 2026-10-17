@@ -38,7 +38,7 @@ export default function UpdList() {
         e.preventDefault();
         try {
             await editListHandler(listId, listData); // Update list data
-            customToast("List updated successfully", "success");
+            customToast("List saved", "success");
             navigate("/myLists"); // Redirect to MyLists page after updating
         } catch (error) {
             console.error("Error updating list:", error);
@@ -46,16 +46,16 @@ export default function UpdList() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-white">
-            <div className="flex items-center justify-center w-full max-w-md">
-                <div className="bg-gray-200 text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-lg p-6 w-full space-y-6">
-                    <h1 className="text-3xl font-bold text-center">
+        <div className="page flex min-h-[70vh] items-center justify-center">
+            <div className="w-full max-w-md">
+                <div className="panel p-6 md:p-8 w-full space-y-6">
+                    <h1 className="page-title">
                         Edit List
                     </h1>
                     <form onSubmit={handleFormSubmit} className="space-y-6">
                         <div>
                             <label
-                                className="block text-sm font-medium mb-2"
+                                className="label"
                                 htmlFor="listName"
                             >
                                 List Name
@@ -67,12 +67,12 @@ export default function UpdList() {
                                 value={listData.listName}
                                 onChange={handleInputChange}
                                 required
-                                className="w-full bg-gray-100 text-black dark:bg-gray-800 dark:text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="field"
                             />
                         </div>
                         <div>
                             <label
-                                className="block text-sm font-medium mb-2"
+                                className="label"
                                 htmlFor="description"
                             >
                                 Description
@@ -82,12 +82,12 @@ export default function UpdList() {
                                 id="description"
                                 value={listData.description}
                                 onChange={handleInputChange}
-                                className="w-full bg-gray-100 text-black dark:bg-gray-800 dark:text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="field"
                             />
                         </div>
                         <div>
                             <label
-                                className="block text-sm font-medium mb-2"
+                                className="label"
                                 htmlFor="likes"
                             >
                                 Likes
@@ -98,12 +98,12 @@ export default function UpdList() {
                                 id="likes"
                                 value={listData.likes}
                                 disabled
-                                className="w-full bg-gray-100 text-black dark:bg-gray-800 dark:text-white rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 opacity-50"
+                                className="w-full field opacity-50"
                             />
                         </div>
                         <button
                             type="submit"
-                            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                            className="btn btn-primary w-full"
                         >
                             Update List
                         </button>

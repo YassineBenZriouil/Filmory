@@ -3,7 +3,6 @@ import { fetchMovieGeneres, fetchSeriesGeneres } from "./../movie/allFetcher";
 import { useNavigate } from "react-router-dom";
 import SearchDivMovie from "./SearchBars/searchDivMovie";
 import SearchDivTv from "./SearchBars/searchDivTv";
-import Animations from "../static/animations";
 import Loading from "./../static/loading";
 
 export default function Filter() {
@@ -55,17 +54,16 @@ export default function Filter() {
     if (loading) return <Loading />;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-black dark:text-white p-6">
-            <Animations className>
+        <div className="page flex justify-center">
                 <form
                     onSubmit={handleSubmit}
-                    className="bg-gray-200 text-black p-8 dark:bg-gray-900 dark:text-white shadow-lg rounded-lg  space-y-6 w-full "
+                    className="panel w-full max-w-2xl space-y-6 p-6 md:p-8"
                 >
                     <SearchDivMovie />
                     <SearchDivTv />
-                    <h2 className="text-2xl font-semibold text-black dark:text-white">
+                    <h1 className="page-title">
                         Filter
-                    </h2>
+                    </h1>
                     <div className="space-y-2">
                         <h3 className="text-lg font-medium">Type:</h3>
                         <div className="flex space-x-4">
@@ -76,7 +74,7 @@ export default function Filter() {
                                     value="movie"
                                     checked={selectedType === "movie"}
                                     onChange={() => handleTypeChange("movie")}
-                                    className="form-radio h-5 w-5 text-blue-500"
+                                    className="h-5 w-5 accent-[rgb(var(--beam))]"
                                 />
                                 <span>Movie</span>
                             </label>
@@ -87,7 +85,7 @@ export default function Filter() {
                                     value="tv"
                                     checked={selectedType === "tv"}
                                     onChange={() => handleTypeChange("tv")}
-                                    className="form-radio h-5 w-5 text-blue-500"
+                                    className="h-5 w-5 accent-[rgb(var(--beam))]"
                                 />
                                 <span>TV Show</span>
                             </label>
@@ -108,7 +106,7 @@ export default function Filter() {
                                         value={year}
                                         checked={selectedYear === year}
                                         onChange={() => setSelectedYear(year)}
-                                        className="form-radio h-5 w-5 text-blue-500 checked:text-blue-500"
+                                        className="h-5 w-5 accent-[rgb(var(--beam))]"
                                     />
                                     <span>{year}</span>
                                 </label>
@@ -138,7 +136,7 @@ export default function Filter() {
                                                     : [...prevGenres, value]
                                             );
                                         }}
-                                        className="form-checkbox h-5 w-5 text-blue-500"
+                                        className="h-5 w-5 accent-[rgb(var(--beam))]"
                                     />
                                     <span>{genre.name}</span>
                                 </label>
@@ -149,13 +147,12 @@ export default function Filter() {
                     <div className="flex justify-end">
                         <button
                             type="submit"
-                            className=" bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded"
+                            className="btn btn-primary"
                         >
                             Filter
                         </button>
                     </div>
                 </form>
-            </Animations>
         </div>
     );
 }

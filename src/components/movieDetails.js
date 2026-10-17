@@ -5,10 +5,9 @@ import {
     fetchSeriesByGenres,
 } from "./../movie/allFetcher";
 import { useParams } from "react-router-dom";
-import Animations from "../static/animations";
 import Loading from "../static/loading";
-import { Link } from "react-router-dom";
 import SmallCard from "./smallCard";
+import CardGrid from "./cardGrid";
 import { fetchCurrentUserLists } from "../movie/databaseFetcher";
 import { addMovieToList } from "../movie/databaseFetcher";
 import { customToast } from "../static/toast";
@@ -89,16 +88,19 @@ export default function MovieDetails() {
 
     const handleAddToList = async () => {
         if (!chosenList) {
-            customToast("Please select a list before adding.", "error");
+            customToast("Choose a list first", "error");
             return;
         }
 
         try {
             await addMovieToList(chosenList, id, type); // id and type represent the item and its type
-            customToast("Item added to the list!", "success");
+            customToast(
+                `Added to ${userLists?.find((l) => l.id === chosenList)?.listName || "your list"}`,
+                "success"
+            );
         } catch (error) {
             console.error("Error adding item to list:", error);
-            customToast("Failed to add item to the list." , "error");
+            customToast("Couldn’t add it to the list. Try again.", "error");
         }
     };
 
@@ -107,6 +109,14 @@ export default function MovieDetails() {
     };
 
     const [titleField, dateField] = typeCheck();
+
+    useEffect(() => {
+        if (movie?.[titleField]) {
+            document.title = `${movie[titleField]} – ${
+                process.env.REACT_APP_COMPANY_NAME || "Filmory"
+            }`;
+        }
+    }, [movie, titleField]);
 
     if (!movie) {
         return <Loading />;
@@ -120,13 +130,12 @@ export default function MovieDetails() {
         <div
             className="min-h-screen bg-cover bg-center flex items-center justify-center"
             style={{
-                backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.50), rgba(0, 0, 0, 0.7)), url(https://image.tmdb.org/t/p/original${movie.backdrop_path})`,
+                backgroundImage: `linear-gradient(to right, rgb(var(--booth) / 0.55), rgb(var(--booth) / 0.85)), url(https://image.tmdb.org/t/p/w1280${movie.backdrop_path})`,
             }}
         >
-            <Animations>
                 <div
                     ref={targetRef}
-                    className="flex flex-col w-fit m-2 p-2 lg:flex-row items-center lg:items-start bg-gray-200 text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-lg overflow-hidden bg-opacity-95 justify-between"
+                    className="flex flex-col w-fit m-2 p-2 lg:flex-row items-center lg:items-start bg-leader text-screen rounded-[14px] overflow-hidden justify-between"
                 >
                     <div className="flex justify-center items-center">
                         <img
@@ -135,16 +144,16 @@ export default function MovieDetails() {
                             className="w-80 lg:w-50 h-auto object-cover rounded"
                         />
                     </div>
-                    <div className="text-black dark:text-white p-2 lg:p-2 lg:w-2/3 space-y-7 align-middle justify-center">
+                    <div className="text-screen p-2 lg:p-2 lg:w-2/3 space-y-7 align-middle justify-center">
                         <h2 className="text-4xl font-bold">
                             {movie[titleField]}
                         </h2>
                         <div className="flex justify-between text-sm">
-                            <p className="text-black dark:text-white p-2 dark:bg-gray-900">
+                            <p className="text-screen p-2">
                                 Rating:{" "}
                                 {movie.vote_average?.toFixed(1) || "N/A"} / 10
                             </p>
-                            <p className="text-black dark:text-white p-2 dark:bg-gray-900">
+                            <p className="text-screen p-2">
                                 Released:{" "}
                                 {new Date(
                                     movie[dateField]
@@ -218,7 +227,7 @@ export default function MovieDetails() {
                         </div>
                         <div className="flex justify-between">
                             <select
-                                className="cursor-pointer bg-blue-500 hover:bg-blue-700 h-10 text-white rounded-lg shadow-lg overflow-hidden bg-opacity-95 m-2 p-2"
+                                className="field w-auto cursor-pointer"
                                 value={chosenList}
                                 onChange={(e) => setChosenList(e.target.value)}
                             >
@@ -231,39 +240,33 @@ export default function MovieDetails() {
                             </select>
                             <button
                                 onClick={handleAddToList}
-                                className="bg-green-500 hover:bg-green-700 h-10 text-white rounded-lg m-2 p-2"
+                                className="btn btn-primary"
                             >
                                 Add
                             </button>
                         </div>
                     </div>
                 </div>
-                <div className="flex flex-col w-fill bg-gray-200 text-black dark:bg-black dark:text-white rounded-lg shadow-lg overflow-hidden bg-opacity-95 m-2 p-2">
-                    <h1 className="text-2xl font-bold ml-20 m-3 uppercase">
+                <div className="flex flex-col w-fill bg-leader text-screen rounded-[14px] overflow-hidden m-2 p-2">
+                    <h1 className="text-2xl font-bold ml-20 m-3">
                         Similar {type === "movie" ? "Movies" : "Series"}
                     </h1>
-                    <div className="md:grid-cols-3 lg:grid-cols-4 gap-3 flex flex-wrap justify-center">
+                    <CardGrid>
                         {simular?.slice(0, limit).map((latestMovie) => (
-                            <Link
-                                onClick={scrollToTarget}
-                                to={`/movieDetails/${latestMovie.id}/${type}`}
+                            <SmallCard
                                 key={latestMovie.id}
-                            >
-                                <SmallCard
-                                    data={latestMovie}
-                                    type={type === "movie" ? "movie" : "tv"}
-                                />
-                            </Link>
+                                data={latestMovie}
+                                type={type === "movie" ? "movie" : "tv"}
+                            />
                         ))}
-                    </div>
+                    </CardGrid>
                     <button
-                        className="bg-blue-500 hover:bg-blue-700 h-10 text-white font-bold py-2 px-4 rounded m-3 mx-20"
+                        className="btn btn-secondary m-3 mx-auto"
                         onClick={seeMore}
                     >
                         See More
                     </button>
                 </div>
-            </Animations>
         </div>
     );
 }

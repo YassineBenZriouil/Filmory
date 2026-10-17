@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchListById, removeItemFromList } from "../../movie/databaseFetcher";
 import SmallCard from "../smallCard";
+import CardGrid from "../cardGrid";
+import { SkeletonGrid } from "../../static/loading";
 import { fetchOneMovie, fetchOneSerie } from "../../movie/oneFetcher";
 
 export default function ListInside() {
@@ -72,64 +74,65 @@ export default function ListInside() {
     };
 
     return (
-        <div className="bg-white min-h-screen text-black dark:bg-black dark:text-white pb-5">
-            {error && <p className="text-red-500 text-center">{error}</p>}
+        <div className="min-h-screen pb-5">
+            {error && <p className="page text-velvet">{error}</p>}
             {listData ? (
-                <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-                    <div className="text-center">
-                        <h1 className="text-3xl font-bold text-black dark:text-white">
-                            {listData.listName.toUpperCase()}
+                <div className="page">
+                    <div>
+                        <h1 className="page-title">
+                            {listData.listName}
                         </h1>
-                        <p className="text-lg text-gray-700 dark:text-gray-300 mt-2">
+                        <p className="mt-3 max-w-[68ch] text-grain">
                             {listData.description}
                         </p>
 
                         <div className="mt-6">
                             <Link
                                 to="/"
-                                className="bg-blue-600 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg"
+                                className="btn btn-primary"
                             >
-                                <i className="fa-solid fa-plus"></i> Add Movie
+                                <i className="fa-solid fa-plus" aria-hidden="true"></i> Add films
                             </Link>
                         </div>
                     </div>
 
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="mt-10">
+                    <CardGrid>
                         {worksData.length > 0 ? (
                             worksData.map((work) => (
                                 <div
                                     key={work.id}
-                                    className="flex flex-col items-center"
+                                    className="flex flex-col"
                                 >
-                                    <Link
-                                        to={`/movieDetails/${work.id}/${work.type}`}
-                                    >
-                                        <SmallCard
+                                    <SmallCard
                                             data={work}
                                             type={work.type}
                                         />
-                                    </Link>
                                     <button
-                                        className="mt-2 text-red-500 hover:text-red-700"
+                                        className="btn btn-destructive mt-1 self-start border-0 px-2 text-sm"
+                                        aria-label={`Remove ${work.title || work.name}`}
                                         onClick={() =>
                                             handleRemoveWork(work.id, work.type)
                                         }
                                     >
-                                        <i className="fa-solid fa-trash"></i>
+                                        <i className="fa-solid fa-trash" aria-hidden="true"></i> Remove
                                     </button>
                                 </div>
                             ))
                         ) : (
-                            <p className="text-center text-gray-500 dark:text-gray-400">
-                                No works found...
+                            <p className="col-span-full text-grain">
+                                This list is empty.
                             </p>
                         )}
+                    </CardGrid>
                     </div>
                 </div>
             ) : (
-                <p className="text-center text-gray-500 dark:text-gray-400">
-                    Loading list...
-                </p>
+                !error && (
+                    <div className="page">
+                        <SkeletonGrid count={10} />
+                    </div>
+                )
             )}
         </div>
     );

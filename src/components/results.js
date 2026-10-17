@@ -1,9 +1,9 @@
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { filteredFetcher } from "../movie/allFetcher"; // Ensure you import the FilteredFetcher function
-import SmallCard from "./smallCard"; // Import your SmallCard component
-import Loading from "../static/loading";
-import { Link } from "react-router-dom";
+import { filteredFetcher } from "../movie/allFetcher";
+import SmallCard from "./smallCard";
+import CardGrid from "./cardGrid";
+import { SkeletonGrid } from "../static/loading";
 
 export default function Results() {
     const location = useLocation();
@@ -18,41 +18,42 @@ export default function Results() {
             setLoading(true);
             const genres = selectedGenreIds || [];
             const country = selectedCountryIso || "";
-            const data = await filteredFetcher(selectedType, selectedYear, genres, country);
-            setResults(data);
+            const data = await filteredFetcher(
+                selectedType,
+                selectedYear,
+                genres,
+                country
+            );
+            setResults(data || []);
             setLoading(false);
         };
-    
+
         fetchResults();
     }, [selectedType, selectedYear, selectedGenreIds, selectedCountryIso]);
-    
+
+    const type = selectedType === "tv" ? "tv" : "movie";
+
     return (
-        <div className="">
-            {loading ? (
-                <Loading />
-            ) : (
-                <div className="pt-5 md:grid-cols-3 lg:grid-cols-4 gap-3 flex flex-wrap align-middle justify-center  bg-white dark:bg-black text-black dark:text-white pb-5">
-                    {results.length > 0 ? (
-                        results.map((item) => (
-                            <Link
-                                to={`/movieDetails/${item.id}/${selectedType}`}
-                                key={item.id}
-                            >
-                                <SmallCard
-                                    data={item}
-                                    type={
-                                        selectedType === "movie"
-                                            ? "movie"
-                                            : "tv"
-                                    }
-                                />
-                            </Link>
-                        ))
-                    ) : (
-                        <p>No results found</p>
-                    )}
-                </div>
-            )}
+        <div className="page">
+            <h1 className="page-title">Results</h1>
+            <div className="mt-8">
+                {loading ? (
+                    <SkeletonGrid />
+                ) : results.length > 0 ? (
+                    <CardGrid>
+                        {results.map((item) => (
+                            <SmallCard key={item.id} data={item} type={type} />
+                        ))}
+                    </CardGrid>
+                ) : (
+                    <div className="space-y-4">
+                        <p className="text-grain">No films match these filters.</p>
+                        <Link to="/filter" className="btn btn-secondary">
+                            Change filters
+                        </Link>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

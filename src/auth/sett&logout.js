@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "./firebase";
 import { getDoc, doc } from "firebase/firestore";
-import Animations from "./../static/animations";
 import { customToast } from "../static/toast";
 
 export default function Logout() {
@@ -13,7 +12,7 @@ export default function Logout() {
     const handleLogout = () => {
         localStorage.removeItem("loggedInUser");
         localStorage.removeItem("cart");
-        customToast("User logged out successfully", "success");
+        customToast("Logged out", "success");
         navigate("/register");
     };
 
@@ -51,28 +50,27 @@ export default function Logout() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-black text-white">
-            <Animations>
-                <div className="bg-gray-200 text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-lg p-6 w-80 space-y-6 mx-auto">
-                    <h3 className="text-xl font-semibold text-center">
-                        Welcome to {process.env.REACT_APP_COMPANY_NAME}
-                    </h3>
-                    <h5 className="text-lg font-medium text-center">
+        <div className="page flex min-h-[70vh] items-center justify-center">
+                <div className="panel w-full max-w-sm space-y-6 p-6 md:p-8">
+                    <h1 className="font-display text-[31px] font-extrabold">
+                        Welcome to {process.env.REACT_APP_COMPANY_NAME || "Filmory"}
+                    </h1>
+                    <h5 className="text-lg font-bold">
                         {userDetails.userName || "Guest"}
                     </h5>
-                    <p className="text-sm text-center">
+                    <p className="text-sm text-grain">
                         Email: {userDetails.email || "No email found"}
                     </p>
                     <div className="space-y-3">
                         <button
-                            className="w-full bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                            className="btn btn-destructive w-full"
                             onClick={handleLogout}
                         >
                             Logout
                         </button>
                         {isadmin && (
                             <button
-                                className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                                className="btn btn-primary w-full"
                                 onClick={handelpanel}
                             >
                                 Admin Panel
@@ -80,7 +78,6 @@ export default function Logout() {
                         )}
                     </div>
                 </div>
-            </Animations>
         </div>
     );
 }

@@ -1,6 +1,5 @@
 // MyLists.js
 import React, { useEffect, useState } from "react";
-import Animations from "../../static/animations";
 import {
     fetchCurrentUserLists,
     deleteListHandler,
@@ -45,18 +44,15 @@ export default function MyLists() {
     };
 
     return (
-        <div className="min-h-screen  flex items-center justify-center bg-white dark:bg-black text-white">
-            <div className="flex items-center justify-center w-full max-w-4xl m-3">
-                <Animations>
-                    <div className="bg-gray-200 text-black dark:bg-gray-900 dark:text-white rounded-lg shadow-lg p-6 w-full space-y-6">
-                        <h1 className="text-3xl font-bold text-center">
+        <div className="page flex min-h-[70vh] items-center justify-center">
+            <div className="w-full max-w-4xl">
+                    <div className="panel p-6 md:p-8 w-full space-y-6">
+                        <h1 className="page-title">
                             My Lists
                         </h1>
-                        <div className="text-center">
-                            <Link to="/addList">
-                                <button className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                                    Add A List
-                                </button>
+                        <div>
+                            <Link to="/addList" className="btn btn-primary w-full">
+                                New list
                             </Link>
                             <input
                                 value={searchQuery}
@@ -64,9 +60,9 @@ export default function MyLists() {
                                     setSearchQuery(e.target.value); // Update the search query state
                                     handleSearch(e.target.value); // Trigger search on every change
                                 }}
-                                placeholder="Search Movies..."
+                                placeholder="Search your lists"
                                 type="text"
-                                className="mt-4 w-full p-2 bg-gray-300 text-black rounded-l-md dark:bg-gray-700 dark:text-white focus:outline-none"
+                                className="field mt-4"
                             />
                         </div>
                         <div className="space-y-4">
@@ -79,13 +75,12 @@ export default function MyLists() {
                                     />
                                 ))
                             ) : (
-                                <p className="text-center text-sm text-gray-600 dark:text-gray-300">
+                                <p className="text-grain">
                                     No lists found...
                                 </p>
                             )}
                         </div>
                     </div>
-                </Animations>
             </div>
         </div>
     );

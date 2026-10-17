@@ -1,9 +1,448 @@
-/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* {
-    @apply transition-colors duration-200;
-    @apply transition-all duration-200 ease-in-out;
+/* ---------- Tokens ---------- */
+
+/* Matinee (light): house lights up, silver screen. */
+:root {
+    --booth: 230 234 237;
+    --leader: 211 218 223;
+    --reel: 180 192 200;
+    --grain: 79 99 112;
+    --screen: 15 30 38;
+    --beam: 185 131 26;
+    --velvet: 154 46 58;
+    --house: 47 122 92;
+    --ink: 15 30 38; /* text on beam fills, same in both themes */
+    --focus: 138 94 10; /* beam darkened to keep 3:1 on the light background */
+
+    --t-blink: 90ms;
+    --t-quick: 160ms;
+    --t-move: 280ms;
+    --t-frame: 420ms;
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-reel: cubic-bezier(0.65, 0, 0.35, 1);
+
+    --glow: 0 0 0 1px rgb(var(--beam)), 0 8px 32px -8px rgb(var(--beam) / 0.35);
+
+    color-scheme: light;
+}
+
+/* Booth (dark): the projection room. */
+:root.dark {
+    --booth: 15 30 38;
+    --leader: 28 51 64;
+    --reel: 46 74 87;
+    --grain: 141 160 171;
+    --screen: 233 237 240;
+    --beam: 242 195 91;
+    --velvet: 180 67 79;
+    --house: 95 168 138;
+    --focus: 242 195 91;
+
+    color-scheme: dark;
+}
+
+@media (prefers-contrast: more) {
+    :root {
+        --grain: var(--screen);
+        --reel: var(--grain);
+    }
+}
+
+/* ---------- Base ---------- */
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-booth font-body text-screen antialiased;
+        font-size: 16px;
+        line-height: 1.55;
+    }
+
+    h1,
+    h2,
+    h3 {
+        @apply font-display;
+        line-height: 1;
+    }
+
+    ::selection {
+        background: rgb(var(--beam));
+        color: rgb(var(--ink));
+    }
+
+    input,
+    textarea,
+    select {
+        caret-color: rgb(var(--beam));
+    }
+
+    :focus {
+        outline: none;
+    }
+
+    :focus-visible {
+        outline: 2px solid rgb(var(--focus));
+        outline-offset: 3px;
+    }
+
+    /* Scrollbars */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(var(--reel)) rgb(var(--booth));
+    }
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+        background: rgb(var(--booth));
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgb(var(--reel));
+        border-radius: 10px;
+        border: 2px solid rgb(var(--booth));
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgb(var(--grain));
+    }
+}
+
+/* Swap themes without every colour transition firing at once. */
+.theme-switching,
+.theme-switching * {
+    transition: none !important;
+}
+
+/* ---------- Components ---------- */
+
+@layer components {
+    /* Page gutter and width */
+    .page-x {
+        @apply px-4 md:px-8 xl:px-[72px];
+    }
+    .page {
+        @apply page-x mx-auto w-full max-w-content py-10 md:py-12;
+    }
+    .page-title {
+        @apply font-display text-[39px] font-extrabold leading-[0.95] md:text-[49px];
+        letter-spacing: -0.01em;
+    }
+
+    /* Buttons: primary, secondary, text, destructive */
+    .btn {
+        @apply inline-flex min-h-[44px] select-none items-center justify-center gap-2 rounded-[6px] px-5 text-base font-bold;
+        transition: color var(--t-quick), background-color var(--t-quick),
+            border-color var(--t-quick), box-shadow var(--t-quick),
+            transform var(--t-blink), filter var(--t-quick);
+    }
+    .btn:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+    .btn:disabled,
+    .btn[aria-disabled="true"] {
+        @apply cursor-not-allowed opacity-40;
+    }
+    .btn-primary {
+        @apply bg-beam text-ink;
+    }
+    .btn-primary:hover:not(:disabled) {
+        filter: brightness(1.08);
+    }
+    .btn-secondary {
+        @apply border border-reel text-screen;
+    }
+    .btn-secondary:hover:not(:disabled) {
+        @apply border-grain;
+    }
+    .btn-text {
+        @apply px-2 text-grain;
+    }
+    .btn-text:hover:not(:disabled) {
+        @apply text-screen;
+    }
+    .btn-destructive {
+        @apply border border-velvet text-velvet;
+    }
+    .btn-destructive:hover:not(:disabled) {
+        @apply bg-velvet/10;
+    }
+    .btn-icon {
+        @apply w-11 px-0;
+    }
+
+    /* Form fields */
+    .field {
+        @apply min-h-[44px] w-full rounded-[6px] border border-reel bg-leader px-3 py-2 text-screen placeholder:text-grain;
+        transition: border-color var(--t-quick);
+    }
+    .field:hover {
+        @apply border-grain;
+    }
+    .field:focus,
+    .field:focus-visible {
+        @apply border-beam;
+        outline: none;
+    }
+    .label {
+        @apply mb-1 block text-[13px] text-grain;
+    }
+
+    /* Surfaces */
+    .panel {
+        @apply rounded-[14px] bg-leader;
+    }
+
+    /* Faint film grain behind images while they load */
+    .grain {
+        @apply bg-leader;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+    }
+
+    /* Film card */
+    .film-frame {
+        transition: transform var(--t-quick) var(--ease-out),
+            box-shadow var(--t-quick) var(--ease-out);
+        box-shadow: inset 0 0 0 1px rgb(var(--reel) / 0.4);
+    }
+    .film-card:hover .film-frame,
+    .film-card:focus-visible .film-frame {
+        transform: translateY(-4px);
+        box-shadow: var(--glow);
+    }
+    .film-card:active .film-frame {
+        transform: translateY(-4px) scale(0.98);
+        transition-duration: var(--t-blink);
+    }
+    .film-card:focus-visible {
+        outline: none;
+    }
+    .fade-img {
+        opacity: 0;
+        transition: opacity var(--t-move) var(--ease-out);
+    }
+    .fade-img.is-loaded {
+        opacity: 1;
+    }
+
+    /* Rows scroll sideways without a visible scrollbar */
+    .row-scroller {
+        scrollbar-width: none;
+    }
+    .row-scroller::-webkit-scrollbar {
+        display: none;
+    }
+    .fade-end {
+        mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+    }
+    .fade-start {
+        mask-image: linear-gradient(to right, transparent, #000 48px);
+    }
+    .fade-start.fade-end {
+        mask-image: linear-gradient(
+            to right,
+            transparent,
+            #000 48px,
+            #000 calc(100% - 48px),
+            transparent
+        );
+    }
+}
+
+/* ---------- Loader: film-leader countdown ---------- */
+
+.leader {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 2px solid rgb(var(--reel));
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+.leader::before,
+.leader::after {
+    content: "";
+    position: absolute;
+    background: rgb(var(--reel));
+}
+.leader::before {
+    inset: 0 auto 0 50%;
+    width: 1px;
+}
+.leader::after {
+    inset: 50% 0 auto 0;
+    height: 1px;
+}
+.leader-sweep {
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(rgb(var(--beam) / 0.25) 0deg 90deg, transparent 90deg);
+    animation: leader-sweep 1s linear infinite;
+}
+.leader-num {
+    position: relative;
+    z-index: 1;
+    font-family: "Big Shoulders Display", sans-serif;
+    font-weight: 800;
+    font-size: 49px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+@keyframes leader-sweep {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Skeleton sweep */
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: rgb(var(--leader));
+}
+.skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgb(var(--screen) / 0.06) 50%,
+        transparent 70%
+    );
+    transform: translateX(-100%);
+    animation: skeleton-sweep 1.6s var(--ease-reel) infinite;
+}
+@keyframes skeleton-sweep {
+    to {
+        transform: translateX(100%);
+    }
+}
+
+/* ---------- The beam ---------- */
+
+.beam {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgb(var(--beam) / 0.12), transparent);
+    pointer-events: none;
+    z-index: 45;
+    opacity: 0;
+    transition: transform var(--t-move) var(--ease-out), opacity var(--t-quick);
+    will-change: transform;
+}
+
+/* ---------- Toasts ---------- */
+
+.Toastify__toast-container {
+    --toastify-toast-width: 380px;
+}
+.Toastify__toast {
+    position: relative;
+    min-height: 56px;
+    padding: 12px 8px 12px 20px;
+    border-radius: 14px;
+    border: 1px solid rgb(var(--reel));
+    background: rgb(var(--leader));
+    color: rgb(var(--screen));
+    box-shadow: none;
+    font-family: "Atkinson Hyperlegible", sans-serif;
+    font-size: 16px;
+    overflow: hidden;
+}
+.Toastify__toast::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: rgb(var(--beam));
+}
+.Toastify__toast--success::before {
+    background: rgb(var(--house));
+}
+.Toastify__toast--error::before {
+    background: rgb(var(--velvet));
+}
+.Toastify__toast-body {
+    padding: 0;
+    margin: 0;
+}
+@media (max-width: 480px) {
+    .Toastify__toast-container {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        width: auto;
+        padding: 0;
+    }
+    .Toastify__toast {
+        margin-bottom: 8px;
+    }
+}
+.toast-rise-in {
+    animation: toast-rise-in var(--t-move) var(--ease-out) both;
+}
+.toast-rise-out {
+    animation: toast-rise-out var(--t-quick) var(--ease-in) both;
+}
+@keyframes toast-rise-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+}
+@keyframes toast-rise-out {
+    to {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+    .leader-sweep,
+    .skeleton::after {
+        animation: none;
+    }
+    .film-card:hover .film-frame,
+    .film-card:focus-visible .film-frame,
+    .film-card:active .film-frame,
+    .btn:active:not(:disabled) {
+        transform: none;
+    }
+    .beam {
+        transition: opacity 120ms;
+    }
+    .toast-rise-in {
+        animation: toast-fade-in 120ms both;
+    }
+    .toast-rise-out {
+        animation: toast-fade-out 120ms both;
+    }
+    @keyframes toast-fade-in {
+        from {
+            opacity: 0;
+        }
+    }
+    @keyframes toast-fade-out {
+        to {
+            opacity: 0;
+        }
+    }
 }

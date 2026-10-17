@@ -24,7 +24,7 @@ export default function SearchDivMovie() {
     };
 
     return (
-        <div className="relative flex items-center space-x-2 w-full max-w-md">
+        <div className="relative w-full">
             <div className="flex w-full">
                 <input
                     value={searchQuery}
@@ -34,30 +34,31 @@ export default function SearchDivMovie() {
                     }}
                     placeholder="Search Movies..."
                     type="text"
-                    className=" rounded-md w-full p-2 bg-gray-300 text-black rounded-l-md dark:bg-gray-700 dark:text-white focus:outline-none"
+                    className="field"
                 />
             </div>
             {resultsDivShowen && (
                 <div
                     ref={dropdownRef}
-                    className="absolute top-12 right-0 w-full bg-gray-300 dark:bg-gray-700 text-black dark:text-white rounded-md shadow-lg z-10 overflow-hidden"
+                    className="absolute top-12 right-0 w-full bg-leader text-screen border border-reel rounded-[14px] z-10 overflow-hidden"
                 >
                     <div className="max-h-90 overflow-y-auto">
                         {searchQueryResults.slice(0, 5).map((result) => (
                             <Link
                                 key={result.id}
                                 to={`/movieDetails/${result.id}/movie`}
-                                className="flex items-center p-2 hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors"
+                                className="flex items-center p-2 hover:bg-reel transition-colors duration-quick"
                                 onClick={closeResultsDiv}
                             >
                                 <img
                                     src={
                                         result.poster_path
-                                            ? `https://image.tmdb.org/t/p/w500${result.poster_path}`
+                                            ? `https://image.tmdb.org/t/p/w92${result.poster_path}`
                                             : "https://png.pngtree.com/png-vector/20221125/ourmid/pngtree-no-image-available-icon-flatvector-illustration-pic-design-profile-vector-png-image_40966566.jpg"
                                     }
                                     alt={result.title}
-                                    className="w-12 h-12 object-cover rounded-md"
+                                    className="h-[69px] w-[46px] shrink-0 rounded-[3px] object-cover"
+                                    loading="lazy"
                                 />
                                 <p className="ml-3">
                                     {result.title || result.name}
@@ -65,7 +66,7 @@ export default function SearchDivMovie() {
                             </Link>
                         ))}
                         {searchQueryResults.length === 0 && (
-                            <p className="p-2 text-center">No results found.</p>
+                            <p className="p-3 text-grain">Nothing found. Try the original title.</p>
                         )}
                     </div>
                 </div>

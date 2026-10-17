@@ -1,36 +1,56 @@
 import React from "react";
-import Theme from "../style/themeBtn";
 import { Link } from "react-router-dom";
+import ThemeControl from "../style/themeBtn";
+import Lens from "./lens";
 
-export default function Footer({ theme, toggleTheme }) {
-    const CurrentTime = new Date().getFullYear();
+const brand = process.env.REACT_APP_COMPANY_NAME || "Filmory";
+
+export default function Footer({ theme, setTheme }) {
+    const year = new Date().getFullYear();
     return (
-        <div className=" bg-gray-200 text-black p-4 dark:bg-gray-900 dark:text-white border-t border-gray-700">
-            <div className="flex flex-col md:flex-row justify-between items-center">
-                {/* Company Name */}
-                <Link
-                    to="/"
-                    className="flex items-center justify-center space-x-2 cursor-pointer"
-                >
-                    {" "}
-                    <i className="fa-solid fa-brain text-4xl text-blue-500"></i>
-                    <h1 className="text-2xl font-bold  hover:text-blue-500 cursor-pointer dark:text-white">
-                        {process.env.REACT_APP_COMPANY_NAME || "Your Company"}
-                    </h1>
-                </Link>
-                {/* Copyright */}
-                <p className="text-sm mt-2 md:mt-0  dark:text-white ">
-                    © {CurrentTime}
-                    All rights reserved.
-                    {process.env.REACT_APP_COMPANY_NAME || "Your Company"}
-                </p>{" "}
-                <p>Made By Yassine Ben Zriouil </p>
-                <a href="https://ybz.vercel.app/">Visit</a>
-                {/* Theme Toggle Button */}
-                <div className="mt-2 md:mt-0">
-                    <Theme theme={theme} toggleTheme={toggleTheme} />
+        <footer className="border-t border-reel text-[13px] leading-[1.4] text-grain">
+            <div className="page-x mx-auto flex max-w-[1464px] flex-col gap-8 py-12 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-3">
+                    <Link to="/" className="inline-flex items-center gap-2 text-screen">
+                        <Lens className="h-6 w-6" />
+                        <span className="font-display text-xl font-extrabold leading-none">
+                            {brand}
+                        </span>
+                    </Link>
+                    <p className="max-w-[60ch]">
+                        Film data from{" "}
+                        <a
+                            href="https://www.themoviedb.org/"
+                            className="text-screen underline decoration-reel underline-offset-4 hover:decoration-beam"
+                        >
+                            TMDB
+                        </a>
+                        . This product uses the TMDB API but is not endorsed or
+                        certified by TMDB.
+                    </p>
+                    <p>
+                        Made by Yassine Ben Zriouil at{" "}
+                        <a
+                            href="https://ybz.vercel.app/"
+                            className="text-screen underline decoration-reel underline-offset-4 hover:decoration-beam"
+                        >
+                            ybz.vercel.app
+                        </a>
+                    </p>
+                </div>
+
+                <div className="flex flex-col gap-4 md:items-end">
+                    <div className="flex items-center gap-4">
+                        <Link to="/about" className="btn btn-text min-h-0 px-0 text-[13px] font-normal">
+                            About
+                        </Link>
+                        <ThemeControl theme={theme} setTheme={setTheme} id="footer-theme" />
+                    </div>
+                    <p>
+                        © {year} {brand}
+                    </p>
                 </div>
             </div>
-        </div>
+        </footer>
     );
 }
